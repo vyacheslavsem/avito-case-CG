@@ -24,6 +24,52 @@ logging.basicConfig(stream=sys.stderr, level=logging.INFO, format="%(asctime)s %
 logger = logging.getLogger(__name__)
 
 
+def unique_keys(pairs):
+    """Detect duplicate keys in JSON objects."""
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON key: {key!r}")
+        result[key] = value
+    return result
+
+
+def reject_constant(value):
+    """Reject JSON NaN/Infinity/Infinity."""
+    raise ValueError("invalid JSON number (NaN/Infinity)")
+
+
+def read_request(raw: bytes) -> dict:
+    """Parse and validate request from stdin bytes.
+
+    Validates:
+    - Single top-level object with only 'messages' key
+    - 1-20 messages
+    - Alternating roles (user, assistant, user, ...)
+    - Each message has exactly {role, text}
+    - Last message is from user
+    - No NaN/Infinity/duplicate keys
+    """
+    request = json.loads(raw.decode("utf-8-sig"), object_pairs_hook=unique_keys,
+                         parse_constant=reject_constant)
+    if not isinstance(request, dict) or set(request) != {"messages"}:
+        raise ValueError("expected an object containing only messages")
+    messages = request["messages"]
+    if not isinstance(messages, list) or not 1 <= len(messages) <= 20:
+        raise ValueError("expected 1 to 20 messages")
+    for index, message in enumerate(messages):
+        if not isinstance(message, dict) or set(message) != {"role", "text"}:
+            raise ValueError("each message must contain role and text only")
+        expected_role = "user" if index % 2 == 0 else "assistant"
+        if message["role"] != expected_role:
+            raise ValueError(f"message[{index}] role expected {expected_role!r}, got {message['role']!r}")
+        if not isinstance(message["text"], str) or not message["text"]:
+            raise ValueError("message text must be a non-empty string")
+    if messages[-1]["role"] != "user":
+        raise ValueError("the last message must come from the buyer")
+    return request
+
+
 def main() -> int:
     # Parse arguments
     cli = argparse.ArgumentParser(description="AI Buyer Assistant")
@@ -45,17 +91,13 @@ def main() -> int:
         logger.error(f"Invalid catalog JSON: {e}")
         return 1
 
-    # Read request from stdin
+    # Read request from stdin with strict validation
     try:
-        raw = sys.stdin.read()
-        request = json.loads(raw)
-        messages = request.get("messages", [])
-        if not messages:
-            logger.error("Request has no messages")
-            return {"error": "No messages in request"}
+        request = read_request(sys.stdin.buffer.read())
+        messages = request["messages"]
         logger.info(f"Processing request with {len(messages)} messages")
-    except json.JSONDecodeError as e:
-        logger.error(f"Invalid request JSON: {e}")
+    except (ValueError, json.JSONDecodeError) as e:
+        logger.error(f"Invalid request: {e}")
         return 1
 
     # Import modules (handle both script and module execution)
