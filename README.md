@@ -7,4 +7,4 @@ test commit egor.
 
 test commit DIMA
 
-privet dima
+privet EGA and Slave
