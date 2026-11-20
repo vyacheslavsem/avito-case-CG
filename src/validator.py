@@ -36,9 +36,14 @@ def validate_response(
         List of error messages. Empty means valid.
     """
     errors = []
+
+    # Handle None or non-dict response
+    if not isinstance(response, dict):
+        return [f"Response must be a dict, got {type(response).__name__}"]
+
     status = response.get("status")
-    cat_ids = {l["id"] for l in catalog}
-    listing_map = {l["id"]: l for l in catalog}
+    cat_ids = {l["id"] for l in catalog if isinstance(l, dict) and "id" in l}
+    listing_map = {l["id"]: l for l in catalog if isinstance(l, dict) and "id" in l}
 
     if status == "ok":
         options = response.get("options", [])
