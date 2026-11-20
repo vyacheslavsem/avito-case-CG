@@ -58,7 +58,7 @@ def validate_response(
     elif status == "no_match":
         message = response.get("message", "")
         if not message:
-            errors.append("no_match: message must be non-empty string")
+            errors.append("no_match response must have non-empty message")
 
     else:
         errors.append(f"Unknown status: {status!r}")

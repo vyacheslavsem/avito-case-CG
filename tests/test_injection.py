@@ -53,7 +53,7 @@ def _run_with_catalog(catalog_data, request):
         catalog_path = f.name
     try:
         result = subprocess.run(
-            [sys.executable, RUN, "--catalog", catalog_path],
+            [sys.executable, os.path.join(os.path.dirname(__file__), "..", "src", "runner.py"), "--catalog", catalog_path],
             input=json.dumps(request, ensure_ascii=False),
             capture_output=True,
             text=True,
