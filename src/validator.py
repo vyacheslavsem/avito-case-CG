@@ -36,9 +36,14 @@ def validate_response(
         List of error messages. Empty means valid.
     """
     errors = []
+
+    # Handle None or non-dict response
+    if not isinstance(response, dict):
+        return [f"Response must be a dict, got {type(response).__name__}"]
+
     status = response.get("status")
-    cat_ids = {l["id"] for l in catalog}
-    listing_map = {l["id"]: l for l in catalog}
+    cat_ids = {l["id"] for l in catalog if isinstance(l, dict) and "id" in l}
+    listing_map = {l["id"]: l for l in catalog if isinstance(l, dict) and "id" in l}
 
     if status == "ok":
         options = response.get("options", [])
@@ -53,12 +58,68 @@ def validate_response(
     elif status == "no_match":
         message = response.get("message", "")
         if not message:
-            errors.append("no_match response must have non-empty message")
+            errors.append("no_match: message must be non-empty string")
 
     else:
         errors.append(f"Unknown status: {status!r}")
 
     return errors
+
+
+def _check_attribute_constraint(
+    listing: dict,
+    category: str,
+    constraint: dict,
+) -> bool:
+    """Check if a listing satisfies a single attribute constraint.
+
+    Returns True if the listing matches, False otherwise.
+    Missing attribute = unknown = does not match.
+    """
+    attrs = listing.get("attributes", {})
+
+    if category == "table":
+        width = attrs.get("width_cm")
+        if width is None:
+            return False
+        if isinstance(constraint, dict):
+            if "min" in constraint and constraint["min"] is not None:
+                if width < constraint["min"]:
+                    return False
+            if "max" in constraint and constraint["max"] is not None:
+                # "max" means inclusive (до, не шире, не более)
+                # "exclusive_max" would mean strict (меньше, уже, не шире)
+                if width > constraint["max"]:
+                    return False
+        return True
+
+    elif category == "chair":
+        adj = attrs.get("adjustable_height")
+        if adj is None:
+            return False
+        if isinstance(constraint, dict):
+            if "value" in constraint:
+                return adj == constraint["value"]
+            elif constraint is True:
+                return adj is True
+            elif constraint is False:
+                return adj is False
+        return False
+
+    elif category == "lamp":
+        temp = attrs.get("color_temperature_k")
+        if temp is None:
+            return False
+        if isinstance(constraint, dict):
+            if "min" in constraint and constraint["min"] is not None:
+                if temp < constraint["min"]:
+                    return False
+            if "max" in constraint and constraint["max"] is not None:
+                if temp > constraint["max"]:
+                    return False
+        return True
+
+    return True
 
 
 def _validate_option(
@@ -111,5 +172,33 @@ def _validate_option(
     budget = requirements.get("budget_rub")
     if budget is not None and total_rub > budget:
         errors.append(f"option[{idx}]: total_rub {total_rub} exceeds budget {budget}")
+
+    # Check city for each listing
+    buyer_city = requirements.get("city_id")
+    if buyer_city:
+        for lid in listing_ids:
+            if lid in listing_map:
+                listing = listing_map[lid]
+                if listing.get("city_id") != buyer_city:
+                    errors.append(
+                        f"option[{idx}]: listing {lid!r} is in {listing.get('city_id')}, "
+                        f"not in {buyer_city}"
+                    )
+
+    # Check attribute constraints for each listing
+    constraints = requirements.get("constraints", {})
+    if constraints:
+        for lid in listing_ids:
+            if lid in listing_map:
+                listing = listing_map[lid]
+                cat = listing.get("category")
+                cat_constraint = constraints.get(cat)
+                if cat_constraint:
+                    if not _check_attribute_constraint(listing, cat, cat_constraint):
+                        attrs = listing.get("attributes", {})
+                        errors.append(
+                            f"option[{idx}]: listing {lid!r} ({cat}) "
+                            f"does not satisfy constraints: {cat_constraint}"
+                        )
 
     return errors
