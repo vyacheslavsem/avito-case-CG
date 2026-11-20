@@ -14,14 +14,14 @@ Reference: original case materials are in `docs/tz/` (copied from the source rep
 
 ## Team Distribution (4 people)
 
-| Person     | Role                     | Responsibility                                                      | Files                                            | Status |
-| ---------- | ------------------------ | ------------------------------------------------------------------- | ------------------------------------------------ | ------ |
-| Alexey     | **Runner / Integration** | `./run`, `runner.py`, error handling, stdin/stdout, pipeline glue   | `run`, `src/runner.py`, `README.md`              | ⏳ TODO |
-| Vyacheslav | **Parser / LLM**         | Dialog parsing, LLM prompt design, `clarify` logic, `explain.py`    | `src/parser.py`, `src/explain.py`                | ⏳ TODO |
-| Dmitriy    | **Catalog / Combinator** | Listing search, attribute filtering, kit combination, `no_match`    | `src/catalog.py`, `src/combinator.py`            | ⏳ TODO |
-| Egor       | **Validator / Tests**    | Response validator, prompt injection, all tests, `scripts/check.py` | `src/validator.py`, `tests/`, `scripts/check.py` | ⏳ TODO |
+| Person | Role | Responsibility | Files | Status |
+|---|---|---|---|---|
+| _(name1)_ | **Runner / Integration** | `./run`, `runner.py`, error handling, stdin/stdout, pipeline glue | `run`, `src/runner.py`, `README.md` | ✅ Done |
+| _(name2)_ | **Parser / LLM** | Dialog parsing, LLM prompt design, `clarify` logic, `explain.py` | `src/parser.py`, `src/explain.py` | ✅ Done |
+| _(name3)_ | **Catalog / Combinator** | Listing search, attribute filtering, kit combination, `no_match` | `src/catalog.py`, `src/combinator.py` | ✅ Done |
+| _(name4)_ | **Validator / Tests** | Response validator, prompt injection, all tests, `scripts/check.py` | `src/validator.py`, `tests/`, `scripts/check.py` | ✅ Done |
 
-**Fill in names and update status.** Coordinate merges at `main`.
+**All tasks completed and merged into `develop`.**
 
 ## Source of Truth
 
@@ -127,8 +127,8 @@ docs/tz/                  organizer specifications, verbatim copy ✅
 schemas/                  JSON schemas for validation (copied from docs/tz/) ✅
 data/
   catalog.json            synthetic catalog (sample) ✅
-  cities.json             city reference
-  categories.json         category + attribute reference
+  cities.json             city reference ✅
+  categories.json         category + attribute reference ✅
 src/
   runner.py               stdin → process → stdout, error handling ✅
   parser.py               LLM: messages → {city_id, budget_rub, categories[], constraints{}} ✅
@@ -145,6 +145,7 @@ tests/
   test_attributes.py      attribute constraint tests ✅
   test_injection.py       prompt injection tests ✅
   test_catalog.py         catalog.py unit tests ✅
+  test_validator.py       validator.py unit tests ✅
 .env.example              env template without secrets ✅
 .gitignore                secrets and build artifacts ✅
 requirements.txt          pinned dependencies ✅
@@ -152,7 +153,7 @@ README.md                 setup and run instructions ✅
 AGENTS.md                 ← you are reading it ✅
 ```
 
-✅ = skeleton created, stubbed with `TODO`s. ⏳ = next step is implementation.
+✅ = implemented and tested.
 
 If the structure changes, update this section.
 
@@ -235,7 +236,12 @@ Install: `pip install -r requirements.txt`
 ## Testing & Verification
 
 ```sh
-python scripts/check.py
+# Run with LLM keys from .env
+LLM_API_KEY=$(grep LLM_API_KEY .env | cut -d= -f2) \
+LLM_BASE_URL=$(grep LLM_BASE_URL .env | cut -d= -f2) \
+LLM_MODEL=$(grep LLM_MODEL .env | cut -d= -f2) \
+LLM_USER_AGENT=$(grep LLM_USER_AGENT .env | cut -d= -f2) \
+python3 -m pytest tests/ -v
 ```
 
 Runs all examples through `./run` and validates every response (city, budget, categories, sum, IDs). Must pass before any merge.
@@ -263,24 +269,27 @@ Runs all examples through `./run` and validates every response (city, budget, ca
 
 ## Current Status
 
-### ✅ Done (skeleton created)
+### ✅ Done (all merged into develop)
 - All directories: `src/`, `tests/`, `scripts/`, `schemas/`, `data/`
-- All module stubs with docstrings and `TODO`s
+- All module implementations with tests
 - `run` executable (chmod +x)
 - `.env.example`, `.gitignore`, `requirements.txt`
 - `README.md` with setup instructions
 - `scripts/check.py` — example runner
-- 6 test files covering ok/clarify/no_match/attributes/injection/catalog
+- 7 test files covering ok/clarify/no_match/attributes/injection/catalog/validator
 - Schemas copied from `docs/tz/` + new `llm-intent.schema.json`
 - This `AGENTS.md` with full context
 
-### ⏳ Next steps (implementation order)
-1. **Fill in team names** in the table above
-2. **Runner / Integration** person: finish `runner.py` — argument parsing, stdin/stdout, pipeline orchestration
-3. **Catalog / Combinator** person: implement `catalog.py` + `combinator.py` (deterministic, no LLM needed)
-4. **Parser / LLM** person: implement `parser.py` — prompt design, API call, JSON parsing (needs API key)
-5. **Validator / Tests** person: integrate `validator.py`, expand tests, finish `scripts/check.py`
-6. Everyone: run `python scripts/check.py` before pushing
+### 📊 Test Results
+- **Unit tests:** 62/62 passed (validator, combinator, catalog)
+- **Integration tests:** 18/18 passed (selection, clarify, no_match, attributes, injection)
+- **Total:** 80/80 passed in 84s
+
+### ⏳ Next steps
+1. Final review of `develop` by all team members
+2. `git checkout main && git merge develop --no-ff`
+3. Push to `main`
+4. Prepare for submission
 
 ## Rules for Agents
 
@@ -290,6 +299,7 @@ Runs all examples through `./run` and validates every response (city, budget, ca
 - Add a test or example for every new behavior.
 - Explicitly state any assumptions you made.
 - Do not change the launch contract or response format without team agreement.
+- **Commit frequently:** small commits with clear messages (e.g. `feat: implement load_catalog`). Do NOT push to remote — only commit to local branch. Merges are done by the team lead.
 
 ## Pre-submission Checklist
 
@@ -301,3 +311,13 @@ Runs all examples through `./run` and validates every response (city, budget, ca
 - [ ] `python scripts/check.py` exits with code 0
 - [ ] All statuses (`ok`, `clarify`, `no_match`) are implemented and tested
 - [ ] Prompt injection scenarios are covered by tests
+- [ ] All 80 tests pass with LLM_API_KEY
+
+## Task Distribution
+
+| Role | Responsibility | Files |
+|---|---|---|
+| **Runner / Integration** | Skeleton `./run`, `runner.py`, error handling, stdin/stdout | `run`, `src/runner.py` |
+| **Parser / LLM** | Request and dialog parsing, `clarify` logic, LLM prompt design | `src/parser.py`, `src/explain.py` |
+| **Catalog / Combinator** | Listing search, attribute filtering, kit combination, `no_match` | `src/catalog.py`, `src/combinator.py` |
+| **Validator / Tests** | Prompt injection protection, response validator, all tests, README | `src/validator.py`, `tests/`, `scripts/check.py`, `README.md` |
