@@ -9,8 +9,12 @@ Avito CyberGarden 2026 — hackathon case: create an AI buyer assistant that par
 pip install -r requirements.txt
 
 # 2. Set up environment
-cp .env.example .env
+cp -n .env.example .env
 # Fill in LLM_API_KEY (get from @ynwaks on Telegram)
+# In a local Bash session, export your settings before running the program:
+set -a
+. ./.env
+set +a
 
 # 3. Run with the sample catalog
 ./run --catalog docs/tz/data/catalog.json < docs/tz/examples/01-selection/request.json > response.json
@@ -27,6 +31,11 @@ pip install -r requirements.txt
 ```
 
 ## LLM configuration
+
+The parser is the component responsible for calling the organizers' Gemma API
+to extract conditions from the dialog. This gateway is the runtime network
+dependency. The runner uses the environment of its parent process. If the
+checker or your shell already supplies the variables, skip the local .env setup.
 
 Environment variables (read at runtime, never hardcoded):
 
@@ -48,6 +57,17 @@ Environment variables (read at runtime, never hardcoded):
 - **stderr:** logs only
 - **exit code:** 0 on success, non-zero on errors
 
+On Windows, from PowerShell with Python on PATH, the same entry point can
+be started through cmd to preserve the UTF-8 input and output bytes:
+
+```powershell
+cmd /c "python run --catalog docs/tz/data/catalog.json < docs/tz/examples/02-clarification/request.json"
+```
+
+For an error-handling check, replace the catalog argument with a missing file.
+The process should report the catalog error on stderr, leave stdout empty,
+and return a non-zero code (`$LASTEXITCODE` in PowerShell).
+
 ## Statuses
 
 | Status | When |
@@ -62,7 +82,11 @@ Environment variables (read at runtime, never hardcoded):
 python scripts/check.py
 ```
 
-Runs all examples through `./run` and validates responses.
+Run this check on Linux. It checks response structure. Also compare the
+meaning of each result with the corresponding organizer example:
+`01-selection` expects a matching kit, and `02-clarification` expects
+only a budget question. While the parser and catalog modules are stubs,
+both examples return clarification questions for all three fields.
 
 ## Project structure
 
