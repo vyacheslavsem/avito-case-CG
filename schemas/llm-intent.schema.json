@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "LLM Intent Extraction Schema",
+  "description": "Schema for LLM to extract buyer requirements from dialog history.",
+  "type": "object",
+  "properties": {
+    "city_id": {
+      "type": ["string", "null"],
+      "enum": ["taganrog", "rostov-na-donu", "azov", null],
+      "description": "Buyer's city for self-pickup. null if not specified."
+    },
+    "budget_rub": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "description": "Total budget in rubles. null if not specified."
+    },
+    "categories": {
+      "type": ["array", "null"],
+      "items": {
+        "type": "string",
+        "enum": ["table", "chair", "lamp"]
+      },
+      "description": "List of requested product categories. null if not specified."
+    },
+    "constraints": {
+      "type": ["object", "null"],
+      "properties": {
+        "width_cm": {
+          "type": ["object", "null"],
+          "properties": {
+            "min": {"type": ["integer", "null"], "minimum": 1},
+            "max": {"type": ["integer", "null"], "minimum": 1}
+          },
+          "additionalProperties": false
+        },
+        "adjustable_height": {
+          "type": ["boolean", "null"]
+        },
+        "color_temperature_k": {
+          "type": ["object", "null"],
+          "properties": {
+            "min": {"type": ["integer", "null"], "minimum": 1},
+            "max": {"type": ["integer", "null"], "minimum": 1}
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": ["city_id", "budget_rub", "categories", "constraints"],
+  "additionalProperties": false
+}

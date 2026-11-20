@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Справочник категорий и характеристик",
+  "type": "array",
+  "minItems": 1,
+  "items": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "enum": [
+          "table",
+          "chair",
+          "lamp"
+        ]
+      },
+      "name": {
+        "type": "string",
+        "minLength": 1
+      },
+      "attributes": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "integer",
+                "boolean"
+              ]
+            },
+            "unit": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minimum": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "id",
+      "name",
+      "attributes"
+    ],
+    "additionalProperties": false
+  }
+}

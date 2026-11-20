@@ -1,0 +1,22 @@
+{
+  "id": "chatcmpl-example",
+  "object": "chat.completion",
+  "created": 1795120000,
+  "model": "google/gemma-4-31B-it",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "content": "{\"city_id\":\"taganrog\",\"budget_rub\":15000,\"categories\":[\"table\",\"chair\",\"lamp\"],\"table_width_max_cm\":100}"
+      }
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 120,
+    "completion_tokens": 60,
+    "total_tokens": 180,
+    "completion_tokens_details": {"reasoning_tokens": 0}
+  }
+}

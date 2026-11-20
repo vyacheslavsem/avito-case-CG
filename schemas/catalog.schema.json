@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Каталог объявлений",
+  "type": "array",
+  "maxItems": 250,
+  "items": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "category": {
+        "type": "string",
+        "enum": [
+          "table",
+          "chair",
+          "lamp"
+        ]
+      },
+      "title": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": {
+        "type": "string"
+      },
+      "price_rub": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "city_id": {
+        "type": "string",
+        "enum": [
+          "taganrog",
+          "rostov-na-donu",
+          "azov"
+        ]
+      },
+      "attributes": {
+        "type": "object",
+        "properties": {
+          "width_cm": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "adjustable_height": {
+            "type": "boolean"
+          },
+          "color_temperature_k": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "additionalProperties": {
+          "type": [
+            "string",
+            "number",
+            "boolean"
+          ]
+        }
+      }
+    },
+    "required": [
+      "id",
+      "category",
+      "title",
+      "description",
+      "price_rub",
+      "city_id",
+      "attributes"
+    ],
+    "additionalProperties": false
+  }
+}

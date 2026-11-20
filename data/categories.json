@@ -1,0 +1,33 @@
+[
+  {
+    "id": "table",
+    "name": "Стол",
+    "attributes": {
+      "width_cm": {
+        "type": "integer",
+        "unit": "cm",
+        "minimum": 1
+      }
+    }
+  },
+  {
+    "id": "chair",
+    "name": "Кресло",
+    "attributes": {
+      "adjustable_height": {
+        "type": "boolean"
+      }
+    }
+  },
+  {
+    "id": "lamp",
+    "name": "Лампа",
+    "attributes": {
+      "color_temperature_k": {
+        "type": "integer",
+        "unit": "K",
+        "minimum": 1
+      }
+    }
+  }
+]

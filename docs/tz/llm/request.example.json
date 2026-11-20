@@ -1,0 +1,32 @@
+{
+  "model": "google/gemma-4-31B-it",
+  "messages": [
+    {
+      "role": "system",
+      "content": "Извлеки условия покупки. Города: taganrog, rostov-na-donu, azov. Категории: table, chair, lamp. Верни только JSON по схеме."
+    },
+    {
+      "role": "user",
+      "content": "Стол не шире метра, кресло и лампа. Таганрог. До 15 000 ₽ за всё."
+    }
+  ],
+  "max_tokens": 256,
+  "response_format": {
+    "type": "json_schema",
+    "json_schema": {
+      "name": "buyer_requirements",
+      "strict": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "city_id": {"type": "string", "enum": ["taganrog", "rostov-na-donu", "azov"]},
+          "budget_rub": {"type": "integer", "minimum": 0},
+          "categories": {"type": "array", "items": {"type": "string", "enum": ["table", "chair", "lamp"]}},
+          "table_width_max_cm": {"type": "integer", "minimum": 1}
+        },
+        "required": ["city_id", "budget_rub", "categories", "table_width_max_cm"],
+        "additionalProperties": false
+      }
+    }
+  }
+}

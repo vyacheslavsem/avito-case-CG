@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Успешный ответ API языковой модели",
+  "type": "object",
+  "required": ["model", "choices"],
+  "properties": {
+    "id": {"type": "string"},
+    "object": {"const": "chat.completion"},
+    "created": {"type": "integer"},
+    "model": {"const": "google/gemma-4-31B-it"},
+    "choices": {
+      "type": "array", "minItems": 1, "maxItems": 1,
+      "items": {
+        "type": "object", "required": ["index", "finish_reason", "message"], "additionalProperties": false,
+        "properties": {
+          "index": {"const": 0},
+          "finish_reason": {"const": "stop"},
+          "message": {
+            "type": "object", "required": ["role", "content"], "additionalProperties": false,
+            "properties": {"role": {"const": "assistant"}, "content": {"type": "string", "minLength": 1}}
+          }
+        }
+      }
+    },
+    "usage": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "prompt_tokens": {"type": "integer", "minimum": 0},
+        "completion_tokens": {"type": "integer", "minimum": 0},
+        "total_tokens": {"type": "integer", "minimum": 0},
+        "prompt_tokens_details": {
+          "type": "object", "additionalProperties": false,
+          "properties": {"cached_tokens": {"type": "integer", "minimum": 0}, "audio_tokens": {"type": "integer", "minimum": 0}}
+        },
+        "completion_tokens_details": {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "reasoning_tokens": {"type": "integer", "minimum": 0},
+            "audio_tokens": {"type": "integer", "minimum": 0},
+            "accepted_prediction_tokens": {"type": "integer", "minimum": 0},
+            "rejected_prediction_tokens": {"type": "integer", "minimum": 0}
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

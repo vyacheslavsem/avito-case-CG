@@ -1,0 +1,9 @@
+{
+  "status": "clarify",
+  "questions": [
+    {
+      "field": "budget_rub",
+      "text": "Какой у вас бюджет на весь комплект?"
+    }
+  ]
+}
