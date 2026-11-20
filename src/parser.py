@@ -266,11 +266,27 @@ def parse_request(messages: list[dict]) -> dict:
     if not isinstance(constraints, dict):
         constraints = {}
 
+    # Strip constraints where all values are None (not actually set)
+    # e.g. {"width_cm": {"min": None, "max": None}} → remove entirely
+    # This prevents filter from rejecting items when constraint wasn't requested
+    stripped_constraints = {}
+    for key, val in constraints.items():
+        if val is None:
+            continue
+        if isinstance(val, dict):
+            # Keep only if at least one non-None value
+            non_none = {k: v for k, v in val.items() if v is not None}
+            if non_none:
+                stripped_constraints[key] = non_none
+        else:
+            # Boolean or other direct value
+            stripped_constraints[key] = val
+
     return {
         "city_id": city_id,
         "budget_rub": budget_rub,
         "categories": categories,
-        "constraints": constraints,
+        "constraints": stripped_constraints,
     }
 
 

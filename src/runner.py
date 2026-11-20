@@ -135,7 +135,21 @@ def main() -> int:
         city_id = requirements["city_id"]
         categories = requirements["categories"]
         budget = requirements["budget_rub"]
-        constraints = requirements.get("constraints", {})
+        raw_constraints = requirements.get("constraints", {})
+
+        # Map attribute names to categories for proper filtering
+        attr_to_category = {
+            "width_cm": "table",
+            "adjustable_height": "chair",
+            "color_temperature_k": "lamp",
+        }
+        # Build per-category constraint dicts
+        per_cat_constraints = {}
+        for attr, cat in attr_to_category.items():
+            if attr in raw_constraints and raw_constraints[attr] is not None:
+                if cat not in per_cat_constraints:
+                    per_cat_constraints[cat] = {}
+                per_cat_constraints[cat][attr] = raw_constraints[attr]
 
         logger.info(f"Filtering: city={city_id}, categories={categories}, budget={budget}")
 
@@ -148,8 +162,8 @@ def main() -> int:
         for cat in categories:
             cat_listings = filter_by_category(city_listings, cat)
 
-            # Apply attribute constraints
-            cat_constraints = constraints.get(cat)
+            # Apply attribute constraints for this category
+            cat_constraints = per_cat_constraints.get(cat)
             if cat_constraints:
                 cat_listings = filter_by_attributes(cat_listings, cat, cat_constraints)
 
@@ -204,10 +218,11 @@ def main() -> int:
             else:
                 logger.info(f"Validation passed, returning {len(options)} options")
 
-    # Write response to stdout
+    # Write response to stdout (binary to prevent encoding issues)
     try:
-        json.dump(response, sys.stdout, ensure_ascii=False, separators=(",", ":"))
-        print()  # trailing newline as allowed by contract
+        payload = json.dumps(response, ensure_ascii=False, allow_nan=False).encode("utf-8")
+        sys.stdout.buffer.write(payload + b"\n")
+        sys.stdout.buffer.flush()
     except Exception as e:
         logger.error(f"Error writing response: {e}")
         return 1
