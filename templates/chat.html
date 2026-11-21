@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}AI-помощник — AvitoGarden{% endblock %}
+
+{% block content %}
+<div class="chat-page">
+    <!-- Chat container -->
+    <div class="chat" id="chatContainer">
+        <!-- Welcome message -->
+        <div class="chat__message chat__message--bot" id="welcomeMessage">
+            <div class="chat__message-avatar chat__message-avatar--bot">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+                    <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path>
+                    <path d="M19 10v1a7 7 0 0 1-14 0v-1"></path>
+                    <line x1="12" y1="18" x2="12" y2="22"></line>
+                    <line x1="8" y1="22" x2="16" y2="22"></line>
+                </svg>
+            </div>
+            <div class="chat__message-content">
+                <p>Здравствуйте! Я AI-помощник AvitoGarden 🌿</p>
+                <p>Помогу подобрать товары из каталога. Опишите, что вы ищете, например:</p>
+                <div class="chat__suggestions">
+                    <button class="chat__suggestion" data-text="Мне нужен стол и кресло вTaganrog, бюджет до 15000₽">Куплю стол и кресло в Таганроге</button>
+                    <button class="chat__suggestion" data-text="Хочу лампу с температурой 4000K, бюджет 5000₽">Ищу лампу с цветовой температурой 4000K</button>
+                    <button class="chat__suggestion" data-text="Нужны столы и стулья в Ростов-на-Дону, бюджет 30000₽">Полная комплектация стола</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Messages will be inserted here -->
+        <div id="chatMessages"></div>
+    </div>
+
+    <!-- Input area -->
+    <div class="chat__input-area" id="chatInputArea">
+        <form class="chat__form" id="chatForm">
+            <input 
+                type="text" 
+                id="chatInput" 
+                class="chat__input" 
+                placeholder="Опишите, что вы ищете..."
+                autocomplete="off"
+            >
+            <button type="submit" class="chat__send-btn" id="sendBtn">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+            </button>
+        </form>
+        <div class="chat__input-hint">Нажмите Enter для отправки</div>
+    </div>
+
+    <!-- Results area (shown when bot returns options) -->
+    <div class="chat__results" id="chatResults" style="display: none;">
+        <h3 class="chat__results-title">Подобранные комплекты</h3>
+        <div class="chat__results-list" id="chatResultsList"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/chat.js"></script>
+{% endblock %}
