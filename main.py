@@ -4,14 +4,21 @@ FastAPI приложение — веб-обёртка над CLI-утилито
 """
 
 import json
+import os
 from pathlib import Path
 
 import jinja2
+from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from cli_wrapper import call_cli
+
+# Загружаем переменные из .env в os.environ (абсолютный путь для надёжности)
+_ENV_PATH = Path(__file__).parent / ".env"
+if _ENV_PATH.exists():
+    load_dotenv(dotenv_path=_ENV_PATH)
 
 app = FastAPI(title="Avito CyberGarden — AI Buyer Assistant")
 
