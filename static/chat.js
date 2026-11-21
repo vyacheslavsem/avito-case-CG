@@ -279,4 +279,98 @@
     function formatPrice(num) {
         return Number(num).toLocaleString("ru-RU");
     }
+
+    // ===== RUSSIAN TRANSLATION DICTIONARY =====
+    // Перевод английских терминов на русский (используется бэкендом в вопросах)
+    var RUSSIAN_TRANSLATIONS = {
+        // Категории
+        "(table, chair, lamp)": "(стол, кресло, лампа)",
+        "table": "стол",
+        "chair": "кресло",
+        "lamp": "лампа",
+        
+        // Поля
+        "budget_rub": "бюджет",
+        "city_id": "город",
+        "categories": "категории",
+        "constraints": "ограничения",
+        
+        // Вопросы бота
+        "Какие категории товаров вас интересуют? (table, chair, lamp)": "Какие категории товаров вас интересуют? (стол, кресло, лампа)",
+        "В каком городе вам нужен самовывоз? (taganrog, rostov-na-donu, azov)": "В каком городе вам нужен самовывоз? (Таганрог, Ростов-на-Дону, Азов)",
+        "Какой у вас бюджет на весь комплект? (в рублях)": "Какой у вас бюджет на весь комплект? (в рублях)",
+        
+        // Сообщения об ошибках
+        "in the city": "В городе",
+        "there is no full set from": "нет полного комплекта из",
+        "by budget": "по бюджету",
+        "Try to increase the budget or change the composition of the kit": "Попробуйте увеличить бюджет или изменить состав комплекта",
+        
+        // Общие фразы
+        "items": "товары",
+        "option": "опция",
+        "products": "товары",
+    };
+
+    // Функция перевода английских терминов на русский
+    function translateEnglishToRussian(text) {
+        if (!text) return text;
+        
+        var translated = text;
+        
+        // Сначала заменяем длинные фразы, чтобы не было конфликтов
+        for (var key in RUSSIAN_TRANSLATIONS) {
+            if (RUSSIAN_TRANSLATIONS.hasOwnProperty(key)) {
+                var regex = new RegExp(key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+                translated = translated.replace(regex, RUSSIAN_TRANSLATIONS[key]);
+            }
+        }
+        
+        // Переводим отдельные слова в скобках
+        translated = translated.replace(/\((table|chair|lamp)\)/g, function(match) {
+            var words = match.replace(/[()]/g, '').split(',').map(function(w) {
+                return RUSSIAN_TRANSLATIONS[w.trim()] || w.trim();
+            });
+            return '(' + words.join(', ') + ')';
+        });
+        
+        return translated;
+    }
+
+    // ===== APPEND MESSAGE TO CHAT =====
+    function appendMessage(role, text) {
+        // Переводим на русский если это сообщение от бота
+        if (role === "bot") {
+            text = translateEnglishToRussian(text);
+        }
+        
+        var msgDiv = document.createElement("div");
+        msgDiv.className = "chat__message chat__message--" + role;
+
+        if (role === "bot") {
+            var avatar = document.createElement("div");
+            avatar.className = "chat__message-avatar chat__message-avatar--bot";
+            avatar.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">' +
+                '<path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path>' +
+                '<path d="M19 10v1a7 7 0 0 1-14 0v-1"></path>' +
+                '<line x1="12" y1="18" x2="12" y2="22"></line>' +
+                '<line x1="8" y1="22" x2="16" y2="22"></line>' +
+                '</svg>';
+            msgDiv.appendChild(avatar);
+        }
+
+        var content = document.createElement("div");
+        content.className = "chat__message-content";
+
+        // Convert newlines to <br>
+        var formattedText = text.replace(/\n/g, "<br>");
+        content.innerHTML = '<p>' + formattedText + '</p>';
+
+        msgDiv.appendChild(content);
+        chatMessages.appendChild(msgDiv);
+
+        // Auto scroll to bottom
+        var container = document.getElementById("chatContainer");
+        container.scrollTop = container.scrollHeight;
+    }
 })();

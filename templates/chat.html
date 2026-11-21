@@ -20,7 +20,7 @@
                 <p>Здравствуйте! Я AI-помощник AvitoGarden 🌿</p>
                 <p>Помогу подобрать товары из каталога. Опишите, что вы ищете, например:</p>
                 <div class="chat__suggestions">
-                    <button class="chat__suggestion" data-text="Мне нужен стол и кресло вTaganrog, бюджет до 15000₽">Куплю стол и кресло в Таганроге</button>
+                    <button class="chat__suggestion" data-text="Мне нужен стол и кресло вТаганроге, бюджет до 15000₽">Куплю стол и кресло в Таганроге</button>
                     <button class="chat__suggestion" data-text="Хочу лампу с температурой 4000K, бюджет 5000₽">Ищу лампу с цветовой температурой 4000K</button>
                     <button class="chat__suggestion" data-text="Нужны столы и стулья в Ростов-на-Дону, бюджет 30000₽">Полная комплектация стола</button>
                 </div>
@@ -29,9 +29,17 @@
 
         <!-- Messages will be inserted here -->
         <div id="chatMessages"></div>
-    </div>
 
-    <!-- Input area -->
+        <!-- Results area (shown when bot returns options) — ВНУТРИ чата, после сообщений -->
+        <div class="chat__results" id="chatResults">
+            <h3 class="chat__results-title">📦 Подобранные комплекты</h3>
+            <div class="chat__results-list" id="chatResultsList"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Input area — отдельно, не скроллится -->
+<div class="chat-page__input-wrapper">
     <div class="chat__input-area" id="chatInputArea">
         <form class="chat__form" id="chatForm">
             <input
@@ -49,12 +57,6 @@
             </button>
         </form>
         <div class="chat__input-hint">Нажмите Enter для отправки</div>
-    </div>
-
-    <!-- Results area (shown when bot returns options) - ПОСЛЕ поля ввода -->
-    <div class="chat__results" id="chatResults">
-        <h3 class="chat__results-title">📦 Подобранные комплекты</h3>
-        <div class="chat__results-list" id="chatResultsList"></div>
     </div>
 </div>
 {% endblock %}
