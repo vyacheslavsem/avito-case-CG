@@ -1,201 +1,123 @@
 #!/usr/bin/env python3
-"""Run all examples through ./run and validate responses.
+"""Check request.json / response.json pairs by running the submitted CLI.
 
-Usage:
-    python scripts/check.py
-    python scripts/check.py --directory tests/
-
-Checks (CONTRACT §5 — auto-check verifies structure + catalog compliance):
-  - Response is valid JSON
-  - Response matches one of the three status schemas
-  - For 'ok': IDs exist, city matches, categories covered exactly once, sum correct, sum ≤ budget
-  - For 'clarify': questions cover all missing fields
-  - For 'no_match': message is non-empty
-  - Catalog compliance: listing_ids in catalog, total_rub = sum(price_rub), city match
+For the two public dialogs, also verify each recommendation against the
+independently specified buyer requirements. For other pairs, the example
+kit supplies the expected city and categories, but neither budget nor bounds.
 """
 import argparse
 import json
+import logging
+import os
+from pathlib import Path
 import subprocess
 import sys
-import os
-import glob
-import logging
-from pathlib import Path
 
-logging.basicConfig(stream=sys.stderr, level=logging.INFO, format="%(levelname)s %(message)s")
-logger = logging.getLogger(__name__)
+ROOT = Path(__file__).resolve().parents[1]
+EXAMPLES = ROOT / "docs" / "tz" / "examples"
+sys.path.insert(0, str(ROOT))
 
-
-def run_case(run_path: str, catalog_path: str, request_path: str) -> dict:
-    """Run ./run --catalog <catalog> < <request> and return parsed JSON."""
-    result = subprocess.run(
-        [run_path, "--catalog", str(catalog_path)],
-        stdin=open(request_path, "r"),
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
-    if result.returncode != 0:
-        logger.error(f"Command failed (exit {result.returncode})")
-        logger.error(f"stderr: {result.stderr}")
-        return None
-    try:
-        return json.loads(result.stdout.strip())
-    except json.JSONDecodeError as e:
-        logger.error(f"Invalid JSON in stdout: {e}")
-        logger.error(f"stdout was: {result.stdout[:500]}")
-        return None
+from src.runner import reject_constant, unique_keys
+from src.validator import validate_response, validate_response_shape
 
 
-def validate_catalog_compliance(response: dict, catalog: list, errors: list) -> None:
-    """Check response against catalog data (CONTRACT §5 — auto-check verifies catalog compliance).
-    
-    Verifies:
-    - All listing_ids exist in catalog
-    - Each listing is in a valid catalog entry
-    - total_rub equals exact sum of price_rub
-    - No duplicate IDs within an option
-    - One listing per category (no extra items)
-    """
-    if response.get("status") != "ok":
-        return
-
-    cat_ids = {l["id"]: l for l in catalog if isinstance(l, dict) and "id" in l}
-    options = response.get("options", [])
-
-    for idx, option in enumerate(options):
-        listing_ids = option.get("listing_ids", [])
-        total_rub = option.get("total_rub", 0)
-
-        if not listing_ids:
-            errors.append(f"option[{idx}]: listing_ids must not be empty")
-            continue
-
-        # Check for duplicate IDs
-        if len(set(listing_ids)) != len(listing_ids):
-            errors.append(f"option[{idx}]: duplicate listing_ids")
-
-        # Check all IDs exist in catalog
-        for lid in listing_ids:
-            if lid not in cat_ids:
-                errors.append(f"option[{idx}]: listing_id {lid!r} not in catalog")
-
-        # Check total_rub equals sum of price_rub
-        if listing_ids:
-            actual_total = sum(cat_ids[lid]["price_rub"] for lid in listing_ids if lid in cat_ids)
-            if total_rub != actual_total:
-                errors.append(
-                    f"option[{idx}]: total_rub {total_rub} != actual sum {actual_total}"
-                )
-
-        # Check one per category
-        cats = set()
-        for lid in listing_ids:
-            if lid in cat_ids:
-                cats.add(cat_ids[lid].get("category"))
-        if len(cats) != len(listing_ids):
-            errors.append(f"option[{idx}]: multiple listings of same category or unknown categories")
+def read_json(data: bytes):
+    return json.loads(data.decode("utf-8"), object_pairs_hook=unique_keys,
+                      parse_constant=reject_constant)
 
 
-def validate_response(response: dict, errors: list) -> None:
-    """Basic schema validation of a response."""
-    if not isinstance(response, dict):
-        errors.append("Response is not a JSON object")
-        return
-    status = response.get("status")
-    if status not in ("ok", "clarify", "no_match"):
-        errors.append(f"Unknown status: {status!r}")
-        return
-    if status == "ok":
-        options = response.get("options")
-        if not isinstance(options, list) or not (1 <= len(options) <= 3):
-            errors.append("ok: options must be array of 1-3 items")
-    elif status == "clarify":
-        questions = response.get("questions")
-        if not isinstance(questions, list) or not questions:
-            errors.append("clarify: questions must be non-empty array")
-    elif status == "no_match":
-        msg = response.get("message")
-        if not isinstance(msg, str) or not msg:
-            errors.append("no_match: message must be non-empty string")
+def public_dialogs() -> list[tuple[dict, dict]]:
+    cases = []
+    for name, budget in (("01-selection", 15000), ("02-clarification", None)):
+        request = read_json((EXAMPLES / name / "request.json").read_bytes())
+        cases.append((request, {
+            "categories": ["table", "chair", "lamp"],
+            "city_id": "taganrog",
+            "budget_rub": budget,
+            "constraints": {"width_cm": {"max": 100}},
+        }))
+    return cases
+
+
+def run_case(run_path: Path, catalog_path: Path, raw_request: bytes):
+    command = [str(run_path), "--catalog", str(catalog_path)]
+    if os.name == "nt" and (run_path == ROOT / "run" or run_path.suffix == ".py"):
+        command.insert(0, sys.executable)
+    result = subprocess.run(command, input=raw_request, capture_output=True, timeout=120)
+    if result.returncode:
+        diagnostic = result.stderr.decode("utf-8", errors="replace").strip()
+        raise ValueError(f"run exited with {result.returncode}: {diagnostic}")
+    return read_json(result.stdout)
+
+
+def check_example(response, expected, request, catalog, requirements=None) -> list[str]:
+    errors = validate_response_shape(expected)
+    if errors:
+        return ["invalid example response: " + "; ".join(errors)]
+    errors = validate_response_shape(response)
+    if errors:
+        return errors
+    if response["status"] != expected["status"]:
+        return [f"expected status {expected['status']}, got {response['status']}"]
+    if requirements is not None:
+        errors.extend(validate_response(response, catalog, request, requirements))
+    if expected["status"] == "clarify":
+        expected_fields = {q["field"] for q in expected["questions"]}
+        if {q["field"] for q in response["questions"]} != expected_fields:
+            errors.append(f"expected clarification fields {sorted(expected_fields)}")
+    elif expected["status"] == "ok" and requirements is None:
+        by_id = {item["id"]: item for item in catalog}
+        try:
+            reference = [by_id[item] for item in expected["options"][0]["listing_ids"]]
+            for option in response["options"]:
+                items = [by_id[item] for item in option["listing_ids"]]
+                if sorted(i["category"] for i in items) != sorted(i["category"] for i in reference):
+                    errors.append("kit categories differ from the example")
+                if {i["city_id"] for i in items} != {i["city_id"] for i in reference}:
+                    errors.append("kit city differs from the example")
+                if sum(i["price_rub"] for i in items) != option["total_rub"]:
+                    errors.append("kit price differs from the catalog")
+        except KeyError as exc:
+            errors.append(f"missing catalog ID or field: {exc}")
+    return errors
 
 
 def main() -> int:
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--directory", "-d",
-        default=os.path.join(os.path.dirname(__file__), "..", "docs", "tz", "examples"),
-        help="Directory containing example request/response pairs",
-    )
-    parser.add_argument(
-        "--catalog",
-        default=os.path.join(os.path.dirname(__file__), "..", "docs", "tz", "data", "catalog.json"),
-        help="Path to catalog JSON",
-    )
-    parser.add_argument(
-        "--run",
-        default=os.path.join(os.path.dirname(__file__), "..", "run"),
-        help="Path to the run executable",
-    )
+    parser.add_argument("--directory", "-d", type=Path, default=EXAMPLES)
+    parser.add_argument("--catalog", type=Path, default=ROOT / "docs/tz/data/catalog.json")
+    parser.add_argument("--run", type=Path, default=ROOT / "run")
     args = parser.parse_args()
-
-    run_path = os.path.abspath(args.run)
-    catalog_path = os.path.abspath(args.catalog)
-
-    if not os.path.isfile(run_path):
-        logger.error(f"run not found: {run_path}")
+    files = sorted(args.directory.rglob("request.json"))
+    if not files:
+        logging.error("No request.json files found in %s", args.directory)
         return 1
-    if not os.access(run_path, os.X_OK):
-        logger.error(f"run is not executable: {run_path}")
-        return 1
-    if not os.path.isfile(catalog_path):
-        logger.error(f"catalog not found: {catalog_path}")
-        return 1
-
-    # Load catalog for compliance checks
     try:
-        with open(catalog_path, "r", encoding="utf-8") as f:
-            catalog = json.load(f)
-        logger.info(f"Loaded catalog with {len(catalog)} listings")
-    except (json.JSONDecodeError, FileNotFoundError) as e:
-        logger.error(f"Could not load catalog: {e}")
+        catalog = read_json(args.catalog.read_bytes())
+        known_dialogs = public_dialogs()
+    except (OSError, ValueError) as exc:
+        logging.error("Cannot read checker inputs: %s", exc)
         return 1
 
-    # Find all example request.json files
-    request_files = sorted(glob.glob(os.path.join(args.directory, "**", "request.json"), recursive=True))
-    if not request_files:
-        logger.warning(f"No request.json files found in {args.directory}")
-        return 0
-
-    total = len(request_files)
     passed = 0
-    failed = 0
-
-    for req_path in request_files:
-        resp_path = req_path.replace("request.json", "response.json")
-        rel = os.path.relpath(req_path)
-        logger.info(f"Testing: {rel}")
-
-        response = run_case(run_path, catalog_path, req_path)
-
-        if response is None:
-            failed += 1
-            logger.error(f"  FAIL: no valid response")
-            continue
-
-        errors = []
-        validate_response(response, errors)
-        validate_catalog_compliance(response, catalog, errors)
-
+    for path in files:
+        try:
+            raw_request = path.read_bytes()
+            request = read_json(raw_request)
+            expected = read_json(path.with_name("response.json").read_bytes())
+            requirements = next((req for dialog, req in known_dialogs if dialog == request), None)
+            response = run_case(args.run.resolve(), args.catalog.resolve(), raw_request)
+            errors = check_example(response, expected, request, catalog, requirements)
+        except (OSError, ValueError, subprocess.TimeoutExpired) as exc:
+            errors = [str(exc)]
         if errors:
-            failed += 1
-            logger.error(f"  FAIL: {'; '.join(errors)}")
+            logging.error("FAIL %s: %s", path.parent.name, "; ".join(errors))
         else:
+            logging.info("PASS %s", path.parent.name)
             passed += 1
-            logger.info(f"  PASS: status={response.get('status')}")
-
-    logger.info(f"Results: {passed}/{total} passed, {failed}/{total} failed")
-    return 1 if failed else 0
+    logging.info("Results: %d/%d passed", passed, len(files))
+    return int(passed != len(files))
 
 
 if __name__ == "__main__":

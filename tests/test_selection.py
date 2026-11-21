@@ -1,11 +1,9 @@
 """Test: basic selection — all conditions known, kit exists."""
 import json
-import subprocess
-import sys
 import os
-import pytest
 
-RUN = os.path.join(os.path.dirname(__file__), "..", "run")
+from tests.cli import run_case
+
 CATALOG = os.path.join(os.path.dirname(__file__), "..", "docs", "tz", "data", "catalog.json")
 
 # Example 1: full request → expect 'ok'
@@ -19,24 +17,13 @@ FULL_REQUEST = {
 }
 
 
-def _run(catalog_path, request):
-    result = subprocess.run(
-        [sys.executable, os.path.join(os.path.dirname(__file__), "..", "src", "runner.py"), "--catalog", catalog_path],
-        input=json.dumps(request, ensure_ascii=False),
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
-    assert result.returncode == 0, f"non-zero exit: {result.stderr}"
-    return json.loads(result.stdout.strip())
-
 
 class TestBasicSelection:
     """Tests for the 'ok' status."""
 
     def test_example_1_selection(self):
         """Example 01-selection: budget + city + categories known → ok."""
-        response = _run(CATALOG, FULL_REQUEST)
+        response = run_case(CATALOG, FULL_REQUEST)
         assert response["status"] == "ok"
         options = response["options"]
         assert 1 <= len(options) <= 3
@@ -49,12 +36,12 @@ class TestBasicSelection:
 
     def test_ok_has_one_per_category(self):
         """Each option has exactly one listing per requested category."""
-        response = _run(CATALOG, FULL_REQUEST)
+        response = run_case(CATALOG, FULL_REQUEST)
         for option in response["options"]:
             cats = set()
             for lid in option["listing_ids"]:
                 # Load catalog to check category
-                with open(CATALOG) as f:
+                with open(CATALOG, encoding="utf-8") as f:
                     catalog = json.load(f)
                 listing = next((l for l in catalog if l["id"] == lid), None)
                 assert listing is not None, f"ID {lid} not in catalog"
@@ -64,8 +51,8 @@ class TestBasicSelection:
 
     def test_ok_total_rub_correct(self):
         """total_rub equals exact sum of price_rub."""
-        response = _run(CATALOG, FULL_REQUEST)
-        with open(CATALOG) as f:
+        response = run_case(CATALOG, FULL_REQUEST)
+        with open(CATALOG, encoding="utf-8") as f:
             catalog = {l["id"]: l for l in json.load(f)}
         for option in response["options"]:
             actual = sum(catalog[lid]["price_rub"] for lid in option["listing_ids"])
@@ -73,12 +60,12 @@ class TestBasicSelection:
 
     def test_ok_total_within_budget(self):
         """total_rub does not exceed budget."""
-        response = _run(CATALOG, FULL_REQUEST)
+        response = run_case(CATALOG, FULL_REQUEST)
         for option in response["options"]:
             assert option["total_rub"] <= 15000
 
     def test_ok_explanation_non_empty(self):
         """Explanation is non-empty and references catalog data."""
-        response = _run(CATALOG, FULL_REQUEST)
+        response = run_case(CATALOG, FULL_REQUEST)
         for option in response["options"]:
             assert len(option["explanation"]) > 0

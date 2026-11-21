@@ -11,29 +11,11 @@ Example 02-clarification:
   - Expected: clarify status with budget_rub question (budget is missing)
 """
 import json
-import subprocess
-import sys
 import os
-import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from tests.cli import run_case
 
-RUN = os.path.join(os.path.dirname(__file__), "..", "run")
 CATALOG = os.path.join(os.path.dirname(__file__), "..", "docs", "tz", "data", "catalog.json")
-
-
-def _run(catalog_path, request):
-    """Run the pipeline and return parsed JSON response."""
-    result = subprocess.run(
-        [sys.executable, os.path.join(os.path.dirname(__file__), "..", "src", "runner.py"), "--catalog", catalog_path],
-        input=json.dumps(request, ensure_ascii=False),
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
-    assert result.returncode == 0, f"non-zero exit: {result.stderr}"
-    return json.loads(result.stdout.strip())
-
 
 # ── Exact public example 01-selection ──────────────────────────────────────
 
@@ -63,25 +45,25 @@ class TestPublicExample01Selection:
 
     def test_example_01_returns_ok_status(self):
         """The public example 01 should return 'ok' (not clarify, not no_match)."""
-        response = _run(CATALOG, EXAMPLE_01_SELECTION)
+        response = run_case(CATALOG, EXAMPLE_01_SELECTION)
         assert response["status"] == "ok", f"Expected 'ok', got {response['status']}"
 
     def test_example_01_has_options(self):
         """Response must have 1-3 options."""
-        response = _run(CATALOG, EXAMPLE_01_SELECTION)
+        response = run_case(CATALOG, EXAMPLE_01_SELECTION)
         assert 1 <= len(response["options"]) <= 3
 
     def test_example_01_budget_constraint(self):
         """Each option must respect the 15 000 budget from the example."""
-        response = _run(CATALOG, EXAMPLE_01_SELECTION)
+        response = run_case(CATALOG, EXAMPLE_01_SELECTION)
         for option in response["options"]:
             assert option["total_rub"] <= 15000, \
                 f"Option total_rub {option['total_rub']} exceeds 15000 budget"
 
     def test_example_01_width_constraint(self):
         """Each table option must have width_cm ≤ 100 ('не шире метра')."""
-        response = _run(CATALOG, EXAMPLE_01_SELECTION)
-        with open(CATALOG) as f:
+        response = run_case(CATALOG, EXAMPLE_01_SELECTION)
+        with open(CATALOG, encoding="utf-8") as f:
             catalog = {l["id"]: l for l in json.load(f)}
         for option in response["options"]:
             for lid in option["listing_ids"]:
@@ -93,8 +75,8 @@ class TestPublicExample01Selection:
 
     def test_example_01_all_three_categories(self):
         """Each option must contain exactly one table, one chair, one lamp."""
-        response = _run(CATALOG, EXAMPLE_01_SELECTION)
-        with open(CATALOG) as f:
+        response = run_case(CATALOG, EXAMPLE_01_SELECTION)
+        with open(CATALOG, encoding="utf-8") as f:
             catalog = {l["id"]: l for l in json.load(f)}
         for option in response["options"]:
             cats = set()
@@ -105,8 +87,8 @@ class TestPublicExample01Selection:
 
     def test_example_01_all_in_taganrog(self):
         """Every listing in every option must be in taganrog."""
-        response = _run(CATALOG, EXAMPLE_01_SELECTION)
-        with open(CATALOG) as f:
+        response = run_case(CATALOG, EXAMPLE_01_SELECTION)
+        with open(CATALOG, encoding="utf-8") as f:
             catalog = {l["id"]: l for l in json.load(f)}
         for option in response["options"]:
             for lid in option["listing_ids"]:
@@ -115,8 +97,8 @@ class TestPublicExample01Selection:
 
     def test_example_01_total_rub_exact(self):
         """total_rub must exactly equal the sum of price_rub from catalog."""
-        response = _run(CATALOG, EXAMPLE_01_SELECTION)
-        with open(CATALOG) as f:
+        response = run_case(CATALOG, EXAMPLE_01_SELECTION)
+        with open(CATALOG, encoding="utf-8") as f:
             catalog = {l["id"]: l for l in json.load(f)}
         for option in response["options"]:
             actual = sum(catalog[lid]["price_rub"] for lid in option["listing_ids"])
@@ -129,26 +111,26 @@ class TestPublicExample02Clarification:
 
     def test_example_02_returns_clarify_status(self):
         """The public example 02 should return 'clarify' (budget is missing)."""
-        response = _run(CATALOG, EXAMPLE_02_CLARIFICATION)
+        response = run_case(CATALOG, EXAMPLE_02_CLARIFICATION)
         assert response["status"] == "clarify", \
             f"Expected 'clarify', got {response['status']}"
 
     def test_example_02_has_budget_question(self):
         """The clarify response must ask for budget_rub."""
-        response = _run(CATALOG, EXAMPLE_02_CLARIFICATION)
+        response = run_case(CATALOG, EXAMPLE_02_CLARIFICATION)
         fields = {q["field"] for q in response["questions"]}
         assert "budget_rub" in fields, \
             f"Expected 'budget_rub' question, got fields: {fields}"
 
     def test_example_02_no_options(self):
         """Clarify status must not have options."""
-        response = _run(CATALOG, EXAMPLE_02_CLARIFICATION)
+        response = run_case(CATALOG, EXAMPLE_02_CLARIFICATION)
         assert "options" not in response, \
             "Clarify response must not contain options"
 
     def test_example_02_no_city_or_categories_questions(self):
         """City and categories are already known, so no question for them."""
-        response = _run(CATALOG, EXAMPLE_02_CLARIFICATION)
+        response = run_case(CATALOG, EXAMPLE_02_CLARIFICATION)
         fields = {q["field"] for q in response["questions"]}
         assert "city_id" not in fields, \
             "City is already known in the example, shouldn't ask again"
@@ -168,7 +150,7 @@ class TestFollowUpClarification:
 
     def test_after_user_provides_budget(self):
         """User answers budget → should return 'ok' (not clarify)."""
-        first_response = _run(CATALOG, EXAMPLE_02_CLARIFICATION)
+        first_response = run_case(CATALOG, EXAMPLE_02_CLARIFICATION)
         question_text = first_response["questions"][0]["text"]
 
         # Simulate checker's behavior: add question as assistant, user's answer as user
@@ -179,13 +161,13 @@ class TestFollowUpClarification:
                 {"role": "user", "text": "15 тысяч рублей"},
             ]
         }
-        response = _run(CATALOG, follow_up_request)
+        response = run_case(CATALOG, follow_up_request)
         assert response["status"] == "ok", \
             f"After user provides budget, expected 'ok', got {response['status']}"
 
     def test_follow_up_respects_budget(self):
         """After clarifying budget, options must respect the new budget."""
-        first_response = _run(CATALOG, EXAMPLE_02_CLARIFICATION)
+        first_response = run_case(CATALOG, EXAMPLE_02_CLARIFICATION)
         question_text = first_response["questions"][0]["text"]
 
         follow_up_request = {
@@ -195,7 +177,7 @@ class TestFollowUpClarification:
                 {"role": "user", "text": "15 тысяч рублей"},
             ]
         }
-        response = _run(CATALOG, follow_up_request)
+        response = run_case(CATALOG, follow_up_request)
         for option in response["options"]:
             assert option["total_rub"] <= 15000, \
                 f"Follow-up option total_rub {option['total_rub']} > 15000"

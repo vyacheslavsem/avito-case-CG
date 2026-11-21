@@ -1,11 +1,9 @@
 """Test: attribute constraints — width bounds, adjustability, color temperature."""
 import json
-import subprocess
-import sys
 import os
-import pytest
 
-RUN = os.path.join(os.path.dirname(__file__), "..", "run")
+from tests.cli import run_case
+
 CATALOG = os.path.join(os.path.dirname(__file__), "..", "docs", "tz", "data", "catalog.json")
 
 # Table narrower than 80cm (strict boundary: "уже 80")
@@ -39,28 +37,15 @@ NO_ADJUSTABLE_CHAIR_REQUEST = {
 }
 
 
-def _run(catalog_path, request):
-    result = subprocess.run(
-        [sys.executable, os.path.join(os.path.dirname(__file__), "..", "src", "runner.py"), "--catalog", catalog_path],
-        input=json.dumps(request, ensure_ascii=False),
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
-    if result.returncode != 0:
-        print(f"stderr: {result.stderr}", file=sys.stderr)
-    assert result.returncode == 0, f"non-zero exit: {result.stderr}"
-    return json.loads(result.stdout.strip())
-
 
 class TestAttributeConstraints:
     """Tests for attribute filtering."""
 
     def test_width_boundary(self):
         """'уже 80' means strictly less than 80cm."""
-        response = _run(CATALOG, STRICT_BOUNDARY_REQUEST)
+        response = run_case(CATALOG, STRICT_BOUNDARY_REQUEST)
         assert response["status"] == "ok"
-        with open(CATALOG) as f:
+        with open(CATALOG, encoding="utf-8") as f:
             catalog = {l["id"]: l for l in json.load(f)}
         for option in response["options"]:
             for lid in option["listing_ids"]:
@@ -71,9 +56,9 @@ class TestAttributeConstraints:
 
     def test_chair_adjustable(self):
         """'с регулировкой высоты' means adjustable_height=true."""
-        response = _run(CATALOG, ADJUSTABLE_CHAIR_REQUEST)
+        response = run_case(CATALOG, ADJUSTABLE_CHAIR_REQUEST)
         assert response["status"] == "ok"
-        with open(CATALOG) as f:
+        with open(CATALOG, encoding="utf-8") as f:
             catalog = {l["id"]: l for l in json.load(f)}
         for option in response["options"]:
             for lid in option["listing_ids"]:
@@ -83,9 +68,9 @@ class TestAttributeConstraints:
 
     def test_chair_not_adjustable(self):
         """'без регулировки высоты' means adjustable_height=false."""
-        response = _run(CATALOG, NO_ADJUSTABLE_CHAIR_REQUEST)
+        response = run_case(CATALOG, NO_ADJUSTABLE_CHAIR_REQUEST)
         assert response["status"] == "ok"
-        with open(CATALOG) as f:
+        with open(CATALOG, encoding="utf-8") as f:
             catalog = {l["id"]: l for l in json.load(f)}
         for option in response["options"]:
             for lid in option["listing_ids"]:

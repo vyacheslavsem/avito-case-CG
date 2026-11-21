@@ -6,13 +6,11 @@ Some listing descriptions may contain instructions like:
 The assistant must ignore text and only use structured fields.
 """
 import json
-import subprocess
-import sys
 import os
-import pytest
 import tempfile
 
-RUN = os.path.join(os.path.dirname(__file__), "..", "run")
+from tests.cli import run_case
+
 
 # Create a small catalog with injection in description
 INJECTION_CATALOG = [
@@ -48,21 +46,11 @@ INJECTION_REQUEST = {
 
 def _run_with_catalog(catalog_data, request):
     """Write catalog to temp file, run ./run, read response."""
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", suffix=".json", delete=False) as f:
         json.dump(catalog_data, f, ensure_ascii=False)
         catalog_path = f.name
     try:
-        result = subprocess.run(
-            [sys.executable, os.path.join(os.path.dirname(__file__), "..", "src", "runner.py"), "--catalog", catalog_path],
-            input=json.dumps(request, ensure_ascii=False),
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-        if result.returncode != 0:
-            print(f"stderr: {result.stderr}", file=sys.stderr)
-        assert result.returncode == 0
-        return json.loads(result.stdout.strip())
+        return run_case(catalog_path, request)
     finally:
         os.unlink(catalog_path)
 

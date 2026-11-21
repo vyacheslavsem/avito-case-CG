@@ -6,11 +6,15 @@ Avito CyberGarden 2026 — hackathon case: create an AI buyer assistant that par
 
 ```sh
 # 1. Install dependencies
-pip install -r requirements.txt
+python3 -m pip install -r requirements.txt
 
 # 2. Set up environment
-cp .env.example .env
-# Fill in LLM_API_KEY (get from @ynwaks on Telegram)
+cp -n .env.example .env
+# Edit .env and fill in LLM_API_KEY (get it from @ynwaks on Telegram).
+# Export the settings into this Bash session:
+set -a
+. ./.env
+set +a
 
 # 3. Run with the sample catalog
 ./run --catalog docs/tz/data/catalog.json < docs/tz/examples/01-selection/request.json > response.json
@@ -27,6 +31,11 @@ pip install -r requirements.txt
 ```
 
 ## LLM configuration
+
+The parser sends dialog history to the organizers' Gemma gateway. Catalog
+filtering, price calculation and explanations run locally. A gateway error
+is reported on stderr and ends the process with a non-zero exit code.
+If your shell or the checker already supplies the variables, skip step 2.
 
 Environment variables (read at runtime, never hardcoded):
 
@@ -59,10 +68,22 @@ Environment variables (read at runtime, never hardcoded):
 ## Testing
 
 ```sh
-python scripts/check.py
+python3 scripts/check.py
 ```
 
-Runs all examples through `./run` and validates responses.
+Runs both organizer examples through the submission entry point. It checks
+the status, requested clarification fields and kit constraints. On Windows,
+use `python scripts/check.py` from a shell with the same environment variables.
+
+To run the full test suite:
+
+```sh
+python3 -m pip install pytest
+python3 -m pytest -q
+```
+
+Run the live suite sequentially. It shares responses between assertions about
+identical inputs and spaces out distinct requests to respect the team quota.
 
 ## Project structure
 

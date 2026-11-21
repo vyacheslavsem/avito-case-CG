@@ -1,7 +1,4 @@
-"""Comprehensive edge-case tests covering all CONTRACT §2–§5 scenarios
-that are NOT covered by existing tests.
-
-These mirror the style and structure of hidden auto-check tests.
+"""Additional integration scenarios derived from CONTRACT §2–§5.
 
 CONTRACT references:
   §2 — attribute boundaries, missing attributes, strict/inclusive rules
@@ -10,30 +7,12 @@ CONTRACT references:
   §5 — injection protection, structured fields only
 """
 import json
-import subprocess
-import sys
 import os
-import pytest
 import tempfile
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from tests.cli import run_case as _run
 
-RUN = os.path.join(os.path.dirname(__file__), "..", "run")
 CATALOG_PATH = os.path.join(os.path.dirname(__file__), "..", "docs", "tz", "data", "catalog.json")
-DATA_CATALOG_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "catalog.json")
-
-
-def _run(catalog_path, request, timeout=120):
-    """Run ./run --catalog <path> with request, return parsed JSON response."""
-    result = subprocess.run(
-        [sys.executable, os.path.join(os.path.dirname(__file__), "..", "src", "runner.py"), "--catalog", catalog_path],
-        input=json.dumps(request, ensure_ascii=False),
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-    )
-    assert result.returncode == 0, f"non-zero exit ({result.returncode}): {result.stderr}"
-    return json.loads(result.stdout.strip())
 
 
 def _load_catalog(path=CATALOG_PATH):
@@ -50,7 +29,7 @@ class TestInclusiveBoundaries:
     """Inclusive boundary phrases must include the exact boundary value."""
 
     def test_do_x_inclusive_boundary_at_value(self):
-        """"до 100 см" → table with width_cm=100 MUST be included.
+        """"до 100 см" → table with width_cm=100 is eligible.
 
         CONTRACT §2: "до", "не более", "не шире", "от" include boundary.
         """
@@ -67,8 +46,8 @@ class TestInclusiveBoundaries:
                 listing = cat_ids[lid]
                 if listing["category"] == "table":
                     width = listing["attributes"].get("width_cm")
-                    if width is not None:
-                        assert width <= 100, f"width {width} > 100 violates 'до 100'"
+                    assert width is not None
+                    assert width <= 100, f"width {width} > 100 violates 'до 100'"
 
     def test_ne_bolshe_x_inclusive_boundary(self):
         """"не более 100 см" → same inclusive semantics as "до 100"."""
@@ -85,11 +64,11 @@ class TestInclusiveBoundaries:
                 listing = cat_ids[lid]
                 if listing["category"] == "table":
                     width = listing["attributes"].get("width_cm")
-                    if width is not None:
-                        assert width <= 100
+                    assert width is not None
+                    assert width <= 100
 
     def test_ne_menshe_x_inclusive_lower_boundary(self):
-        """"не менее 4000 К" → lamp with color_temperature_k=4000 MUST be included.
+        """"не менее 4000 К" → lamp with color_temperature_k=4000 is eligible.
 
         CONTRACT §2: "не менее" includes boundary → >= X.
         """
@@ -106,8 +85,8 @@ class TestInclusiveBoundaries:
                 listing = cat_ids[lid]
                 if listing["category"] == "lamp":
                     temp = listing["attributes"].get("color_temperature_k")
-                    if temp is not None:
-                        assert temp >= 4000, f"temp {temp} < 4000 violates 'не менее 4000'"
+                    assert temp is not None
+                    assert temp >= 4000, f"temp {temp} < 4000 violates 'не менее 4000'"
 
     def test_from_x_inclusive_lower_only(self):
         """"от 50 см" (no upper bound) → table with width_cm=50+ should match."""
@@ -124,8 +103,8 @@ class TestInclusiveBoundaries:
                 listing = cat_ids[lid]
                 if listing["category"] == "table":
                     width = listing["attributes"].get("width_cm")
-                    if width is not None:
-                        assert width >= 50
+                    assert width is not None
+                    assert width >= 50
 
     def test_range_from_to_inclusive_both_endpoints(self):
         """"от 80 до 100" → [80, 100] inclusive on BOTH ends.
@@ -145,11 +124,11 @@ class TestInclusiveBoundaries:
                 listing = cat_ids[lid]
                 if listing["category"] == "table":
                     width = listing["attributes"].get("width_cm")
-                    if width is not None:
-                        assert 80 <= width <= 100, f"width {width} not in [80, 100]"
+                    assert width is not None
+                    assert 80 <= width <= 100, f"width {width} not in [80, 100]"
 
     def test_lamp_do_x_inclusive_boundary(self):
-        """"до 5000 К" → lamp with color_temperature_k=5000 MUST be included.
+        """"до 5000 К" → lamp with color_temperature_k=5000 is eligible.
 
         Lamp color_temperature_k uses same boundary rules as width_cm.
         """
@@ -166,8 +145,8 @@ class TestInclusiveBoundaries:
                 listing = cat_ids[lid]
                 if listing["category"] == "lamp":
                     temp = listing["attributes"].get("color_temperature_k")
-                    if temp is not None:
-                        assert temp <= 5000
+                    assert temp is not None
+                    assert temp <= 5000
 
 
 # ─────────────────────────────────────────────────────────
@@ -197,8 +176,8 @@ class TestStrictBoundaries:
                 listing = cat_ids[lid]
                 if listing["category"] == "table":
                     width = listing["attributes"].get("width_cm")
-                    if width is not None:
-                        assert width < 80, f"width {width} >= 80 violates strict 'уже 80'"
+                    assert width is not None
+                    assert width < 80, f"width {width} >= 80 violates strict 'уже 80'"
 
     def test_menshe_x_strict_upper_boundary(self):
         """"меньше 100 см" → table with width_cm=100 MUST be excluded."""
@@ -215,8 +194,8 @@ class TestStrictBoundaries:
                 listing = cat_ids[lid]
                 if listing["category"] == "table":
                     width = listing["attributes"].get("width_cm")
-                    if width is not None:
-                        assert width < 100
+                    assert width is not None
+                    assert width < 100
 
     def test_shire_x_strict_wider(self):
         """"шире 80" → table with width_cm=80 MUST be excluded."""
@@ -233,8 +212,8 @@ class TestStrictBoundaries:
                 listing = cat_ids[lid]
                 if listing["category"] == "table":
                     width = listing["attributes"].get("width_cm")
-                    if width is not None:
-                        assert width > 80
+                    assert width is not None
+                    assert width > 80
 
     def test_bolshe_x_strict_lower_boundary(self):
         """"больше 4000 К" → lamp with color_temperature_k=4000 MUST be excluded."""
@@ -251,8 +230,8 @@ class TestStrictBoundaries:
                 listing = cat_ids[lid]
                 if listing["category"] == "lamp":
                     temp = listing["attributes"].get("color_temperature_k")
-                    if temp is not None:
-                        assert temp > 4000
+                    assert temp is not None
+                    assert temp > 4000
 
 
 # ─────────────────────────────────────────────────────────
@@ -278,9 +257,7 @@ class TestBooleanAttributes:
                 listing = cat_ids[lid]
                 if listing["category"] == "chair":
                     adj = listing["attributes"].get("adjustable_height")
-                    # Either explicitly false, or missing (unknown = no match when constrained)
-                    if adj is not None:
-                        assert adj is False
+                    assert adj is False
 
     def test_explicit_false_excluded_from_positive_request(self):
         """Chair with adjustable_height=false does NOT match 'с регулировкой высоты'."""
@@ -297,8 +274,7 @@ class TestBooleanAttributes:
                 listing = cat_ids[lid]
                 if listing["category"] == "chair":
                     adj = listing["attributes"].get("adjustable_height")
-                    if adj is not None:
-                        assert adj is True, f"adjustable_height={adj} should be True"
+                    assert adj is True, f"adjustable_height={adj} should be True"
 
 
 # ─────────────────────────────────────────────────────────
@@ -324,27 +300,21 @@ class TestMissingAttributes:
                 listing = cat_ids[lid]
                 if listing["category"] == "table":
                     width = listing["attributes"].get("width_cm")
-                    if width is not None:
-                        assert width <= 80
-                    # Tables with empty attributes should NOT appear
+                    assert width is not None
+                    assert width <= 80
 
-    def test_empty_attributes_included_when_no_constraint(self):
-        """Table with attributes={} IS included when no constraint is specified."""
-        response = _run(CATALOG_PATH, {
-            "messages": [
-                {"role": "user", "text": "Стол, кресло. Таганрог. До 10000 ₽."}
-            ]
-        })
+    def test_empty_attributes_included_when_no_constraint(self, tmp_path):
+        """An item can still be selected when its missing attribute is unconstrained."""
+        table = next(item for item in _load_catalog()
+                     if item["city_id"] == "taganrog" and item["category"] == "table"
+                     and not item["attributes"])
+        path = tmp_path / "catalog.json"
+        path.write_text(json.dumps([table], ensure_ascii=False), encoding="utf-8")
+        response = _run(path, {"messages": [
+            {"role": "user", "text": "Стол. Таганрог. До 10000 ₽."}
+        ]})
         assert response["status"] == "ok"
-        catalog = _load_catalog()
-        cat_ids = {l["id"]: l for l in catalog}
-        has_empty_attr = False
-        for option in response["options"]:
-            for lid in option["listing_ids"]:
-                listing = cat_ids[lid]
-                if listing["category"] == "table" and not listing.get("attributes"):
-                    has_empty_attr = True
-        assert has_empty_attr, "Should include tables with empty attributes when no constraint"
+        assert [option["listing_ids"] for option in response["options"]] == [[table["id"]]]
 
     def test_lamp_empty_attributes_excluded_when_temp_constraint(self):
         """Lamp with attributes={} does NOT match 'Лампа до 4000 К'."""
@@ -361,8 +331,8 @@ class TestMissingAttributes:
                 listing = cat_ids[lid]
                 if listing["category"] == "lamp":
                     temp = listing["attributes"].get("color_temperature_k")
-                    if temp is not None:
-                        assert temp <= 4000
+                    assert temp is not None
+                    assert temp <= 4000
 
     def test_chair_empty_attributes_included_when_no_constraint(self):
         """Chair with attributes={} IS included when no adjustment constraint."""
@@ -413,18 +383,16 @@ class TestSingleCategory:
                 listing = cat_ids[lid]
                 if listing["category"] == "chair":
                     adj = listing["attributes"].get("adjustable_height")
-                    if adj is not None:
-                        assert adj is True
+                    assert adj is True
 
     def test_single_table_no_match_when_constraint_impossible(self):
-        """Single table with tight constraint → no_match or ok (catalog-dependent)."""
+        """The sample catalog has no table with confirmed width ≤ 30 cm."""
         response = _run(CATALOG_PATH, {
             "messages": [
                 {"role": "user", "text": "Стол до 30 см. Таганрог. До 5000 ₽."}
             ]
         })
-        # Very tight constraint — might be ok or no_match depending on catalog
-        assert response["status"] in ("ok", "no_match")
+        assert response["status"] == "no_match"
 
     def test_single_lamp_category(self):
         """Request only lamp → ok."""
@@ -550,18 +518,15 @@ class TestDialogueHistory:
             assert cats == {"lamp"}, f"Expected only lamp, got {cats}"
 
     def test_budget_change_in_followup(self):
-        """User changes budget in follow-up."""
+        """Lowering the budget below all complete kits must change the outcome."""
         response = _run(CATALOG_PATH, {
             "messages": [
-                {"role": "user", "text": "Стол и кресло. Таганрог. До 5000 ₽."},
-                {"role": "assistant", "text": "Понял. Стол и кресло в Таганроге, бюджет 5000 ₽."},
-                {"role": "user", "text": "Добавь до 20000 ₽."}
+                {"role": "user", "text": "Стол и кресло. Таганрог. До 20000 ₽."},
+                {"role": "assistant", "text": "Ищу стол и кресло в Таганроге до 20000 ₽."},
+                {"role": "user", "text": "Уменьшим бюджет до 1000 ₽ за всё."}
             ]
         })
-        assert response["status"] == "ok"
-        for option in response["options"]:
-            assert option["total_rub"] <= 20000, \
-                f"total_rub {option['total_rub']} exceeds budget 20000"
+        assert response["status"] == "no_match"
 
     def test_city_and_budget_change_together(self):
         """User changes both city and budget in one follow-up."""
@@ -598,8 +563,8 @@ class TestDialogueHistory:
                 listing = cat_ids[lid]
                 if listing["category"] == "table":
                     width = listing["attributes"].get("width_cm")
-                    if width is not None:
-                        assert width <= 90
+                    assert width is not None
+                    assert width <= 90
 
     def test_attribute_constraint_overridden(self):
         """User changes attribute constraint: first 80, then 100."""
@@ -618,8 +583,8 @@ class TestDialogueHistory:
                 listing = cat_ids[lid]
                 if listing["category"] == "table":
                     width = listing["attributes"].get("width_cm")
-                    if width is not None:
-                        assert width <= 100
+                    assert width is not None
+                    assert width <= 100
 
 
 # ─────────────────────────────────────────────────────────
@@ -657,16 +622,7 @@ class TestNoMatchScenarios:
                 {"role": "user", "text": "Стол до 35 см, кресло. Таганрог. До 5000 ₽."}
             ]
         })
-        # If ok, no table with empty attributes should appear
-        if response["status"] == "ok":
-            catalog = _load_catalog()
-            cat_ids = {l["id"]: l for l in catalog}
-            for option in response["options"]:
-                for lid in option["listing_ids"]:
-                    listing = cat_ids[lid]
-                    if listing["category"] == "table":
-                        width = listing["attributes"].get("width_cm")
-                        assert width is not None and width <= 35
+        assert response["status"] == "no_match"
 
 
 # ─────────────────────────────────────────────────────────
@@ -677,19 +633,11 @@ class TestDescriptionInjection:
     """Listing descriptions may contain manipulative text. Structured fields only."""
 
     def _run_with_custom_catalog(self, catalog_data, request):
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", suffix=".json", delete=False) as f:
             json.dump(catalog_data, f, ensure_ascii=False)
             catalog_path = f.name
         try:
-            result = subprocess.run(
-                [sys.executable, os.path.join(os.path.dirname(__file__), "..", "src", "runner.py"), "--catalog", catalog_path],
-                input=json.dumps(request, ensure_ascii=False),
-                capture_output=True,
-                text=True,
-                timeout=120,
-            )
-            assert result.returncode == 0, f"exit {result.returncode}: {result.stderr}"
-            return json.loads(result.stdout.strip())
+            return _run(catalog_path, request)
         finally:
             os.unlink(catalog_path)
 
@@ -787,9 +735,7 @@ class TestDescriptionInjection:
         })
         assert response["status"] == "ok"
         for option in response["options"]:
-            for lid in option["listing_ids"]:
-                listing = next(l for l in catalog if l["id"] == lid)
-                assert listing["category"] == "table" if lid.startswith("t-") else "chair"
+            assert sorted(option["listing_ids"]) == ["c-desc-cat", "t-desc-cat"]
 
 
 # ─────────────────────────────────────────────────────────
@@ -818,7 +764,7 @@ class TestOkResponseIntegrity:
             cats = []
             for lid in option["listing_ids"]:
                 cats.append(cat_ids[lid]["category"])
-            assert len(cats) == len(set(cats)), "No duplicate categories in option"
+            assert sorted(cats) == ["chair", "lamp", "table"]
 
     def test_ok_no_extra_items_in_option(self):
         """Options must contain exactly one item per requested category, no extras."""
@@ -828,8 +774,9 @@ class TestOkResponseIntegrity:
             ]
         })
         assert response["status"] == "ok", "LLM failed to parse single category request"
+        catalog = {item["id"]: item for item in _load_catalog()}
         for option in response["options"]:
-            assert len(option["listing_ids"]) >= 1
+            assert [catalog[lid]["category"] for lid in option["listing_ids"]] == ["table"]
 
     def test_ok_total_rub_exact_sum_for_all_options(self):
         """total_rub must be exact sum of price_rub for EVERY option."""
