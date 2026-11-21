@@ -14,12 +14,12 @@ Reference: original case materials are in `docs/tz/` (copied from the source rep
 
 ## Team Distribution (4 people)
 
-| Person | Role | Responsibility | Files | Status |
-|---|---|---|---|---|
-| _(name1)_ | **Runner / Integration** | `./run`, `runner.py`, error handling, stdin/stdout, pipeline glue | `run`, `src/runner.py`, `README.md` | ✅ Done |
-| _(name2)_ | **Parser / LLM** | Dialog parsing, LLM prompt design, `clarify` logic, `explain.py` | `src/parser.py`, `src/explain.py` | ✅ Done |
-| _(name3)_ | **Catalog / Combinator** | Listing search, attribute filtering, kit combination, `no_match` | `src/catalog.py`, `src/combinator.py` | ✅ Done |
-| _(name4)_ | **Validator / Tests** | Response validator, prompt injection, all tests, `scripts/check.py` | `src/validator.py`, `tests/`, `scripts/check.py` | ✅ Done |
+| Person    | Role                     | Responsibility                                                      | Files                                            | Status |
+| --------- | ------------------------ | ------------------------------------------------------------------- | ------------------------------------------------ | ------ |
+| _(name1)_ | **Runner / Integration** | `./run`, `runner.py`, error handling, stdin/stdout, pipeline glue   | `run`, `src/runner.py`, `README.md`              | ✅ Done |
+| _(name2)_ | **Parser / LLM**         | Dialog parsing, LLM prompt design, `clarify` logic, `explain.py`    | `src/parser.py`, `src/explain.py`                | ✅ Done |
+| _(name3)_ | **Catalog / Combinator** | Listing search, attribute filtering, kit combination, `no_match`    | `src/catalog.py`, `src/combinator.py`            | ✅ Done |
+| _(name4)_ | **Validator / Tests**    | Response validator, prompt injection, all tests, `scripts/check.py` | `src/validator.py`, `tests/`, `scripts/check.py` | ✅ Done |
 
 **All tasks completed and merged into `develop`.**
 
