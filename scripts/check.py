@@ -5,12 +5,13 @@ Usage:
     python scripts/check.py
     python scripts/check.py --directory tests/
 
-Checks:
+Checks (CONTRACT §5 — auto-check verifies structure + catalog compliance):
   - Response is valid JSON
   - Response matches one of the three status schemas
   - For 'ok': IDs exist, city matches, categories covered exactly once, sum correct, sum ≤ budget
   - For 'clarify': questions cover all missing fields
   - For 'no_match': message is non-empty
+  - Catalog compliance: listing_ids in catalog, total_rub = sum(price_rub), city match
 """
 import argparse
 import json
@@ -44,6 +45,56 @@ def run_case(run_path: str, catalog_path: str, request_path: str) -> dict:
         logger.error(f"Invalid JSON in stdout: {e}")
         logger.error(f"stdout was: {result.stdout[:500]}")
         return None
+
+
+def validate_catalog_compliance(response: dict, catalog: list, errors: list) -> None:
+    """Check response against catalog data (CONTRACT §5 — auto-check verifies catalog compliance).
+    
+    Verifies:
+    - All listing_ids exist in catalog
+    - Each listing is in a valid catalog entry
+    - total_rub equals exact sum of price_rub
+    - No duplicate IDs within an option
+    - One listing per category (no extra items)
+    """
+    if response.get("status") != "ok":
+        return
+
+    cat_ids = {l["id"]: l for l in catalog if isinstance(l, dict) and "id" in l}
+    options = response.get("options", [])
+
+    for idx, option in enumerate(options):
+        listing_ids = option.get("listing_ids", [])
+        total_rub = option.get("total_rub", 0)
+
+        if not listing_ids:
+            errors.append(f"option[{idx}]: listing_ids must not be empty")
+            continue
+
+        # Check for duplicate IDs
+        if len(set(listing_ids)) != len(listing_ids):
+            errors.append(f"option[{idx}]: duplicate listing_ids")
+
+        # Check all IDs exist in catalog
+        for lid in listing_ids:
+            if lid not in cat_ids:
+                errors.append(f"option[{idx}]: listing_id {lid!r} not in catalog")
+
+        # Check total_rub equals sum of price_rub
+        if listing_ids:
+            actual_total = sum(cat_ids[lid]["price_rub"] for lid in listing_ids if lid in cat_ids)
+            if total_rub != actual_total:
+                errors.append(
+                    f"option[{idx}]: total_rub {total_rub} != actual sum {actual_total}"
+                )
+
+        # Check one per category
+        cats = set()
+        for lid in listing_ids:
+            if lid in cat_ids:
+                cats.add(cat_ids[lid].get("category"))
+        if len(cats) != len(listing_ids):
+            errors.append(f"option[{idx}]: multiple listings of same category or unknown categories")
 
 
 def validate_response(response: dict, errors: list) -> None:
@@ -101,6 +152,15 @@ def main() -> int:
         logger.error(f"catalog not found: {catalog_path}")
         return 1
 
+    # Load catalog for compliance checks
+    try:
+        with open(catalog_path, "r", encoding="utf-8") as f:
+            catalog = json.load(f)
+        logger.info(f"Loaded catalog with {len(catalog)} listings")
+    except (json.JSONDecodeError, FileNotFoundError) as e:
+        logger.error(f"Could not load catalog: {e}")
+        return 1
+
     # Find all example request.json files
     request_files = sorted(glob.glob(os.path.join(args.directory, "**", "request.json"), recursive=True))
     if not request_files:
@@ -125,6 +185,8 @@ def main() -> int:
 
         errors = []
         validate_response(response, errors)
+        validate_catalog_compliance(response, catalog, errors)
+
         if errors:
             failed += 1
             logger.error(f"  FAIL: {'; '.join(errors)}")

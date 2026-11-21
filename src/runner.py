@@ -231,7 +231,10 @@ def main() -> int:
 
 
 def _generate_no_match_message(categories: list, city_id: str, budget: int, category_listings: dict) -> str:
-    """Generate a helpful no_match message."""
+    """Generate a helpful no_match message.
+    
+    Uses actual budget value from requirements, not hardcoded threshold.
+    """
     city_names = {"taganrog": "Таганрог", "rostov-na-donu": "Ростов-на-Дону", "azov": "Азов"}
     city_name = city_names.get(city_id, city_id)
     cat_names = {
@@ -254,7 +257,8 @@ def _generate_no_match_message(categories: list, city_id: str, budget: int, cate
         else:
             message += "не удалось подобрать комплект "
 
-    if budget is not None and budget < 20000:
+    # Use actual budget value from requirements (CONTRACT: no hardcoded thresholds)
+    if budget is not None:
         message += f"по бюджету {budget} руб. Попробуйте увеличить бюджет или изменить состав комплекта."
     else:
         message += "по заданным параметрам. Попробуйте изменить бюджет, город или состав комплекта."

@@ -1,6 +1,6 @@
 """Tests for combinator module."""
 import pytest
-from src.combinator import build_combinations, _generate_explanation
+from src.combinator import build_combinations
 
 
 # Sample test data
@@ -150,8 +150,12 @@ class TestBuildCombinations:
         for option in result:
             assert len(option["listing_ids"]) == len(set(option["listing_ids"]))
 
-    def test_explanation_present(self):
-        """Test that explanations are generated."""
+    def test_no_explanation_in_combinator(self):
+        """Test that combinator does NOT generate explanation.
+        
+        Explanation is generated later in runner.py via explain.py
+        (CONTRACT: selection is deterministic, code-driven; LLM is only for intent parsing).
+        """
         category_listings = {
             "table": TABLE_LISTINGS[:1],
             "chair": CHAIR_LISTINGS[:1],
@@ -161,9 +165,10 @@ class TestBuildCombinations:
         result = build_combinations(category_listings, budget)
 
         assert len(result) == 1
-        assert len(result[0]["explanation"]) > 0
-        assert "Стол" in result[0]["explanation"]
-        assert "Кресло" in result[0]["explanation"]
+        # combinator should NOT have explanation
+        assert "explanation" not in result[0]
+        assert "listing_ids" in result[0]
+        assert "total_rub" in result[0]
 
     def test_exact_budget_match(self):
         """Test that exact budget match is included."""
@@ -178,61 +183,14 @@ class TestBuildCombinations:
         assert result[0]["total_rub"] == 10000
 
     def test_value_error_on_empty_category(self):
-        """Test that ValueError is raised when a category has no listings."""
+        """Test that empty category returns empty list (not ValueError)."""
         category_listings = {
             "table": TABLE_LISTINGS,
             "chair": [],  # Empty
         }
 
-        with pytest.raises(ValueError, match="No listings available for category"):
-            build_combinations(category_listings, budget=20000)
-
-
-class TestExplanationGeneration:
-    """Tests for explanation generation."""
-
-    def test_table_with_width(self):
-        """Test explanation for table with width attribute."""
-        combo = (TABLE_LISTINGS[0],)
-        categories = ["table"]
-
-        explanation = _generate_explanation(combo, categories)
-
-        assert "Стол" in explanation
-        assert "80 см" in explanation
-        assert "5000 руб" in explanation
-
-    def test_chair_with_adjustable_height(self):
-        """Test explanation for chair with adjustable_height."""
-        combo = (CHAIR_LISTINGS[0],)
-        categories = ["chair"]
-
-        explanation = _generate_explanation(combo, categories)
-
-        assert "Кресло" in explanation
-        assert "с регулировкой высоты" in explanation
-
-    def test_lamp_with_color_temperature(self):
-        """Test explanation for lamp with color_temperature_k."""
-        combo = (LAMP_LISTINGS[0],)
-        categories = ["lamp"]
-
-        explanation = _generate_explanation(combo, categories)
-
-        assert "Лампа" in explanation
-        assert "4000 К" in explanation
-
-    def test_multi_category_explanation(self):
-        """Test explanation for multi-category kit."""
-        combo = (TABLE_LISTINGS[0], CHAIR_LISTINGS[0], LAMP_LISTINGS[0])
-        categories = ["table", "chair", "lamp"]
-
-        explanation = _generate_explanation(combo, categories)
-
-        assert "Комплект:" in explanation
-        assert "Стол" in explanation
-        assert "Кресло" in explanation
-        assert "Лампа" in explanation
+        result = build_combinations(category_listings, budget=20000)
+        assert result == []
 
 
 if __name__ == "__main__":
