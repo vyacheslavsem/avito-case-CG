@@ -211,6 +211,56 @@ input, select {
     top: calc(var(--header-height) + 24px);
 }
 
+/* Узкая левая панель на полном экране */
+@media (min-width: 1400px) {
+    .catalog-page__filters {
+        width: 180px;
+        padding: 16px 12px;
+    }
+
+    .catalog-page__filters-title {
+        font-size: 0.95rem;
+        margin-bottom: 12px;
+        padding-bottom: 10px;
+    }
+
+    .filter-group {
+        margin-bottom: 12px;
+    }
+
+    .filter-group__label {
+        font-size: 0.78rem;
+        margin-bottom: 4px;
+    }
+
+    .filter-group__select,
+    .filter-group__price-input {
+        padding: 6px 8px;
+        font-size: 0.82rem;
+    }
+
+    .filter-group__price-row {
+        gap: 6px;
+    }
+
+    .filter-group__price-sep {
+        font-size: 1.1rem;
+        margin: 0 2px;
+    }
+
+    .catalog-page__filters .btn {
+        padding: 8px 12px;
+        font-size: 0.82rem;
+        margin-bottom: 6px;
+    }
+
+    /* Больше колонок на широком экране */
+    .catalog-page__grid {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px;
+    }
+}
+
 .catalog-page__filters-title {
     font-size: 1.1rem;
     font-weight: 600;
@@ -233,17 +283,27 @@ input, select {
 
 .filter-group__select {
     width: 100%;
-    padding: 8px 12px;
+    padding: 8px 30px 8px 12px;
     border: 1px solid var(--color-gray-300);
     border-radius: var(--radius-sm);
-    background: var(--color-white);
+    background: var(--color-white) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 8L1 3h10z'/%3E%3C/svg%3E") no-repeat right 10px center;
+    background-size: 12px;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
     color: var(--color-gray-700);
+    cursor: pointer;
 }
 
-.filter-group__select:focus,
-.filter-group__price-input:focus {
-    outline: none;
-    border-color: var(--color-primary);
+.filter-group__price-labels {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+}
+
+.filter-group__price-labels span {
+    font-size: 0.75rem;
+    color: var(--color-gray-500);
 }
 
 .filter-group__price-row {
@@ -257,15 +317,26 @@ input, select {
     padding: 8px 10px;
     border: 1px solid var(--color-gray-300);
     border-radius: var(--radius-sm);
+    font-size: 0.85rem;
 }
 
 .filter-group__price-sep {
-    color: var(--color-gray-400);
+    color: var(--color-gray-500);
+    font-size: 1.2rem;
+    font-weight: 500;
+    user-select: none;
 }
 
 .catalog-page__filters .btn {
     width: 100%;
     margin-bottom: 8px;
+}
+
+.filter-group__select:focus,
+.filter-group__price-input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px rgba(0, 170, 255, 0.1);
 }
 
 .catalog-page__content {
