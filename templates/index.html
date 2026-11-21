@@ -16,15 +16,10 @@
         </div>
 
         <div class="filter-group">
-            <label class="filter-group__label">Цена, ₽</label>
-            <div class="filter-group__price-labels">
-                <span>от</span>
-                <span>до</span>
-            </div>
             <div class="filter-group__price-row">
-                <input type="number" id="minPrice" class="filter-group__price-input" placeholder="0" min="0">
+                <input class="filter-group__price-input" type="number" min="0" inputmode="numeric" id="minPrice" name="price_from" placeholder="от" aria-label="Цена от, ₽">
                 <span class="filter-group__price-sep">—</span>
-                <input type="number" id="maxPrice" class="filter-group__price-input" placeholder="99999" min="0">
+                <input class="filter-group__price-input" type="number" min="0" inputmode="numeric" id="maxPrice" name="price_to" placeholder="до" aria-label="Цена до, ₽">
             </div>
         </div>
 

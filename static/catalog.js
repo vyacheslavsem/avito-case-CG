@@ -110,22 +110,30 @@
         var city = citySelect ? citySelect.value : "";
         if (city) params.set("city", city);
 
+        console.log("Loading catalog with params:", params.toString());
+
         fetch("/api/catalog?" + params.toString())
             .then(function (res) {
+                console.log("Response status:", res.status);
                 if (!res.ok) throw new Error("HTTP " + res.status);
                 return res.json();
             })
             .then(function (data) {
+                console.log("Catalog data received:", data);
                 allListings = data.listings || [];
+                console.log("Listings count:", allListings.length);
                 categories = data.categories || [];
+                console.log("Categories count:", categories.length);
                 populateCategories();
                 renderListings(allListings);
-                showNotification("Загружено " + allListings.length + " товаров", "success");
+                if (allListings.length > 0) {
+                    showNotification("Загружено " + allListings.length + " товаров", "success");
+                }
             })
             .catch(function (err) {
                 console.error("Failed to load catalog:", err);
-                catalogCount.textContent = "Ошибка загрузки";
-                showNotification("Не удалось загрузить каталог", "error");
+                if (catalogCount) catalogCount.textContent = "Ошибка загрузки";
+                showNotification("Не удалось загрузить каталог: " + err.message, "error");
             })
             .finally(function () {
                 isLoading = false;
@@ -139,8 +147,8 @@
         categories.forEach(function (cat) {
             var value, label;
             if (typeof cat === "object") {
-                value = cat.name || cat.id || cat.category;
-                label = cat.title || cat.name || value;
+                value = cat.id || cat.name || "";
+                label = cat.name || cat.title || cat.id || "Без категории";
             } else {
                 value = cat;
                 label = cat;
@@ -148,7 +156,7 @@
 
             var option = document.createElement("option");
             option.value = value;
-            option.textContent = formatCategory(label);
+            option.textContent = label;
             filterCategory.appendChild(option);
         });
     }
@@ -165,6 +173,7 @@
             if (category && item.category !== category) return false;
 
             var price = item.price_rub || 0;
+            // обе границы включительно: price_from <= price <= price_to
             if (minPrice && price < parseFloat(minPrice)) return false;
             if (maxPrice && price > parseFloat(maxPrice)) return false;
 
@@ -176,15 +185,23 @@
 
     // ===== RESET FILTERS =====
     function resetFilters() {
-        if (citySelect) citySelect.value = "";
-        if (filterCategory) filterCategory.value = "";
-        if (minPriceInput) minPriceInput.value = "";
-        if (maxPriceInput) maxPriceInput.value = "";
-        renderListings(allListings);
+        // Дать браузеру сбросить форму
+        setTimeout(function () {
+            if (citySelect) citySelect.value = "";
+            if (filterCategory) filterCategory.value = "";
+            if (minPriceInput) minPriceInput.value = "";
+            if (maxPriceInput) maxPriceInput.value = "";
+            renderListings(allListings);
+        }, 0);
     }
 
     // ===== RENDER LISTINGS =====
     function renderListings(listings) {
+        if (!catalogGrid) {
+            console.error("catalogGrid element not found!");
+            return;
+        }
+
         catalogGrid.innerHTML = "";
         catalogCount.textContent = listings.length + " товаров";
 
@@ -194,6 +211,8 @@
         }
 
         catalogEmpty.style.display = "none";
+
+        console.log("Rendering", listings.length, "listings");
 
         listings.forEach(function (item) {
             var card = document.createElement("div");
@@ -205,6 +224,8 @@
             var title = item.title || "Без названия";
             var desc = item.description || "";
             var categoryId = item.category || "";
+
+            console.log("Creating card:", title, "Price:", price, "City:", city);
 
             var html = '<div class="product-card__image">📦</div>';
             html += '<div class="product-card__body">';
@@ -224,6 +245,8 @@
 
             catalogGrid.appendChild(card);
         });
+
+        console.log("Cards created. Grid children:", catalogGrid.children.length);
     }
 
     // ===== GO TO CHAT WITH ITEM =====

@@ -199,14 +199,13 @@ input, select {
     gap: 24px;
 }
 
+/* ===== Фильтры (базовые стили, они же — режим «пол-экрана») ===== */
 .catalog-page__filters {
     width: 260px;
     flex-shrink: 0;
     background: var(--color-white);
     border-radius: var(--radius-md);
     padding: 20px;
-    height: fit-content;
-    box-shadow: var(--shadow-sm);
     position: sticky;
     top: calc(var(--header-height) + 24px);
 }
@@ -215,8 +214,6 @@ input, select {
     font-size: 1.1rem;
     font-weight: 600;
     margin-bottom: 16px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid var(--color-gray-200);
 }
 
 .filter-group {
@@ -226,11 +223,11 @@ input, select {
 .filter-group__label {
     display: block;
     font-size: 0.85rem;
-    font-weight: 500;
-    color: var(--color-gray-600);
     margin-bottom: 6px;
+    color: var(--color-gray-600);
 }
 
+/* Категория: select со стрелкой */
 .filter-group__select {
     width: 100%;
     padding: 10px 32px 10px 12px;
@@ -246,17 +243,7 @@ input, select {
     cursor: pointer;
 }
 
-.filter-group__price-labels {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 4px;
-}
-
-.filter-group__price-labels span {
-    font-size: 0.75rem;
-    color: var(--color-gray-500);
-}
-
+/* Цена, ₽: «от — до» */
 .filter-group__price-row {
     display: flex;
     align-items: center;
@@ -279,16 +266,10 @@ input, select {
     line-height: 1;
 }
 
+/* Кнопки «Применить» и «Сбросить» */
 .catalog-page__filters .btn {
     width: 100%;
     margin-bottom: 8px;
-}
-
-.filter-group__select:focus,
-.filter-group__price-input:focus {
-    outline: none;
-    border-color: var(--color-primary);
-    box-shadow: 0 0 0 2px rgba(0, 170, 255, 0.1);
 }
 
 .catalog-page__content {
@@ -766,30 +747,81 @@ input, select {
     }
 }
 
-/* ===== RESPONSIVE ===== */
+/* ===== Полный экран: узкая левая панель ===== */
+@media (min-width: 1400px) {
+    .catalog-page__filters {
+        width: 180px;
+        padding: 16px 12px;
+    }
+    .catalog-page__filters-title {
+        font-size: 0.95rem;
+        margin-bottom: 12px;
+        padding-bottom: 10px;
+    }
+    .filter-group {
+        margin-bottom: 12px;
+    }
+    .filter-group__label {
+        font-size: 0.78rem;
+        margin-bottom: 4px;
+    }
+    .filter-group__select,
+    .filter-group__price-input {
+        padding: 6px 8px;
+        font-size: 0.82rem;
+    }
+    .filter-group__select {
+        padding-right: 28px;
+    }
+
+    .filter-group__price-row {
+        gap: 6px;
+    }
+    /* min-width:0 — иначе два input + тире не влезают в 156px и вылезают за панель */
+    .filter-group__price-input {
+        min-width: 0;
+        width: 100%;
+        -moz-appearance: textfield;
+    }
+    .filter-group__price-input::-webkit-outer-spin-button,
+    .filter-group__price-input::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+    .filter-group__price-sep {
+        font-size: 1.1rem;
+        margin: 0 2px;
+    }
+    .catalog-page__filters .btn {
+        padding: 8px 12px;
+        font-size: 0.82rem;
+        margin-bottom: 6px;
+    }
+    .catalog-page__grid {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px;
+    }
+}
+
+/* ===== Мобильные ===== */
 @media (max-width: 768px) {
     .catalog-page {
         flex-direction: column;
     }
-
     .catalog-page__filters {
         width: 100%;
         position: static;
     }
-
     .catalog-page__grid {
         grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
         gap: 12px;
     }
-
     .product-card__image {
         height: 140px;
     }
-
     .chat-page {
         height: calc(100vh - var(--header-height) - 48px - 100px);
     }
-
     .chat__message {
         max-width: 95%;
     }
