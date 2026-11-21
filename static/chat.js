@@ -68,7 +68,7 @@
         }
 
         // Hide results area for new conversation
-        chatResults.style.display = "none";
+        chatResults.classList.remove("chat__results--visible");
 
         // Add user message to UI
         appendMessage("user", text);
@@ -159,7 +159,7 @@
 
     // ===== RENDER RESULTS =====
     function renderResults(options) {
-        chatResults.style.display = "block";
+        chatResults.classList.add("chat__results--visible");
         chatResultsList.innerHTML = "";
 
         options.forEach(function (option, index) {
@@ -192,8 +192,34 @@
             chatResultsList.appendChild(el);
         });
 
+        // Кнопка для нового поиска
+        var newSearchBtn = document.createElement("div");
+        newSearchBtn.style.textAlign = "center";
+        newSearchBtn.style.marginTop = "12px";
+        newSearchBtn.style.marginBottom = "4px";
+        newSearchBtn.innerHTML = '<button id="newSearchBtn" class="btn btn--secondary" style="padding: 8px 16px; font-size: 0.85rem;">🔄 Новый поиск</button>';
+        chatResultsList.appendChild(newSearchBtn);
+
+        // Добавляем обработчик на кнопку "Новый поиск"
+        document.getElementById("newSearchBtn").addEventListener("click", function () {
+            // Очистить историю
+            messages = [];
+            // Скрыть результаты
+            chatResults.classList.remove("chat__results--visible");
+            // Показать приветственное сообщение
+            if (welcomeMessage) {
+                welcomeMessage.style.display = "flex";
+            }
+            // Очистить сообщения
+            chatMessages.innerHTML = "";
+            // Сфокусировать на поле ввода
+            chatInput.focus();
+        });
+
         // Scroll to results
-        chatResults.scrollIntoView({ behavior: "smooth", block: "start" });
+        setTimeout(function () {
+            chatResults.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }, 100);
     }
 
     // ===== APPEND MESSAGE TO CHAT =====
