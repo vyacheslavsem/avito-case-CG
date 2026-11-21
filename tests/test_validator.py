@@ -16,7 +16,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.validator import validate_response
+from src.validator import validate_response, validate_response_shape
 
 
 # ── Fixtures ──────────────────────────────────────────────────────
@@ -112,7 +112,7 @@ class TestStatusValidation:
     def test_clarify_status_valid(self):
         """Valid clarify response returns no errors."""
         response = _valid_clarify_response([{"field": "budget_rub", "text": "Укажите бюджет"}])
-        errors = validate_response(response, [], {}, {})
+        errors = validate_response(response, [], {}, PARTIAL_REQUIREMENTS)
         assert errors == []
 
     def test_no_match_status_valid(self):
@@ -525,7 +525,7 @@ class TestIntegrationWithRealCatalog:
             {"field": "city_id", "text": "В каком городе вы находитесь?"},
             {"field": "categories", "text": "Какие категории вас интересуют?"},
         ])
-        errors = validate_response(response, catalog, {}, {})
+        errors = validate_response(response, catalog, {}, {"budget_rub": 10000})
         assert errors == []
 
     def test_multiple_bad_options(self, listing_map):
@@ -542,3 +542,53 @@ class TestIntegrationWithRealCatalog:
         assert any("fake1" in e for e in errors)
         assert any("fake2" in e for e in errors)
         assert any("duplicate" in e for e in errors)
+
+
+@pytest.mark.parametrize("response", [
+    {"status": "ok", "options": []},
+    {"status": "ok", "options": [None]},
+    {"status": "ok", "options": [{}] * 4},
+    {"status": "ok", "options": [{"listing_ids": ["x"], "total_rub": True, "explanation": "x"}]},
+    _valid_ok_response([{}], 1),
+    _valid_ok_response(["a", "b", "c", "d"], 4),
+    {"status": "clarify", "questions": [{"field": "other", "text": "?"}]},
+    {"status": "clarify", "questions": [{"field": "city_id", "text": "?", "id": "a"}]},
+    {"status": "clarify", "questions": [{"field": "city_id", "text": "?"}] * 2},
+    {"status": "no_match", "message": 1},
+    {"status": "no_match", "message": "Нет комплекта", "listing_ids": []},
+])
+def test_rejects_invalid_response_shape(response):
+    assert validate_response_shape(response)
+
+
+def test_distinct_kit_compositions_ignore_item_order():
+    result = _valid_ok_response(["a", "b"], 2)
+    result["options"].append(dict(result["options"][0], listing_ids=["b", "a"]))
+    assert any("duplicate kit" in error for error in validate_response_shape(result))
+
+
+@pytest.mark.parametrize(("category", "key", "constraint", "value", "valid"), [
+    ("table", "width_cm", {"max": 100}, 100, True),
+    ("table", "width_cm", {"max": 100}, 101, False),
+    ("lamp", "color_temperature_k", {"min": 4000}, 3999, False),
+    ("chair", "adjustable_height", False, False, True),
+    ("chair", "adjustable_height", False, True, False),
+    ("chair", "adjustable_height", True, True, True),
+    ("chair", "adjustable_height", True, False, False),
+    ("chair", "adjustable_height", False, None, False),
+])
+def test_validates_flat_parser_constraints(category, key, constraint, value, valid):
+    attributes = {} if value is None else {key: value}
+    listing = dict(id="x", city_id="azov", category=category, price_rub=10, attributes=attributes)
+    req = dict(city_id="azov", categories=[category], budget_rub=10, constraints={key: constraint})
+    ok = _valid_ok_response(["x"], 10)
+    assert (validate_response(ok, [listing], {}, req) == []) is valid
+    assert bool(validate_response(_valid_no_match_response(), [listing], {}, req)) is valid
+
+
+def test_clarify_needs_all_missing_fields_including_mixed_categories():
+    req = dict(city_id="azov", categories=["table"], budget_rub=None, _has_unsupported_categories=True)
+    response = _valid_clarify_response([{"field": "budget_rub", "text": "Бюджет?"}])
+    assert validate_response(response, [], {}, req)
+    response["questions"].append({"field": "categories", "text": "Какие товары нужны?"})
+    assert validate_response(response, [], {}, req) == []

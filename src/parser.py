@@ -7,14 +7,11 @@ API: google/gemma-4-31B-it via LLM_BASE_URL + LLM_API_KEY.
 Output is strict JSON schema (llm-intent.schema.json).
 """
 import os
-import sys
 import json
-import logging
-from typing import Optional
+import time
 
 import requests
-
-logger = logging.getLogger(__name__)
+from urllib3.util import Timeout
 
 # Environment variables for LLM connection
 LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "https://sfedu-hackathon-ai-gateway.sfedu-hackathon-ai-gateway.workers.dev/v1")
@@ -74,263 +71,170 @@ INTENT_SCHEMA = {
     "additionalProperties": False
 }
 
-# Sentinel for LLM API errors (distinct from "LLM returned empty/invalid intent")
 class LLMError(Exception):
-    """Raised when LLM API returns an error status (401/403/429/timeout).
-
-    CONTRACT §1: external service errors → stderr + non-zero exit, not clarify/no_match.
-    """
+    """The gateway could not produce a usable intent for this dialog."""
 
 
 # Supported values
 SUPPORTED_CITIES = ["taganrog", "rostov-na-donu", "azov"]
 SUPPORTED_CATEGORIES = ["table", "chair", "lamp"]
 
-# RU -> EN aliases for city IDs (fallback if LLM returns Russian)
-CITY_ALIASES = {
-    "таганрог": "taganrog",
-    "ростов-на-дону": "rostov-na-donu",
-    "ростов": "rostov-na-donu",
-    "азов": "azov",
-}
-
 
 def build_system_prompt() -> str:
     """Build the system prompt for intent extraction."""
     return (
-        "Ты — помощник покупателя. Твоя задача — извлечь условия покупки из диалога. "
-        "Всегда возвращай только JSON по схеме. "
-        "\n\n"
-        "Города (city_id): taganrog, rostov-na-donu, azov. "
-        "Если пользователь написал «Таганрог» — верни 'taganrog'. "
-        "Если «Ростов-на-Дону» — 'rostov-na-donu'. "
-        "Если «Азов» — 'azov'. "
-        "Если город не назван или неясен — верни null."
-        "\n\n"
-        "Категории (categories): table, chair, lamp. "
-        "Важно: если пользователь написал 'спальня', 'кухня', 'офис', 'детская' или общую фразу "
-        "('обставить', 'собрать набор', 'устроить рабочее место') — верни для категорий null. "
-        "Мы зададим уточняющий вопрос. Не угадывай категории!"
-        "\n\n"
-        "Бюджет (budget_rub): общий верхний предел в рублях. "
-        "Если не назван — верни null. Если несколько чисел — бери максимальный верхний предел."
-        "\n\n"
-        "Ограничения по характеристикам (constraints):"
-        "  - width_cm (стол), color_temperature_k (лампа): {'min': int, 'max': int}."
-        "  - adjustable_height (кресло): true (есть регулировка), false (нет)."
-        "\n\n"
-        "Правила границ (ВНИМАНИЕ):"
-        "  - 'до', 'не более', 'не шире', 'от X' (включительно) -> max=X (или min=X)."
-        "  - 'меньше', 'уже', 'шире', 'больше' (строго) -> max=X-1 (или min=X+1)."
-        "  - Пример: 'не шире 100' -> max=100. 'меньше 100' -> max=99."
-        "\n\n"
-        "ИСТОРИЯ ДИАЛОГА (КРИТИЧНО):"
-        "1. Используй ВСЮ историю диалога (все сообщения user и assistant). "
-        "2. Явное изменение условия в новой реплике ЗАМЕНЯЕТ предыдущее значение этого поля. "
-        "   Пример: 'до 10000' → 'давай 20000' → используй 20000."
-        "3. Если условие (город, бюджет, категории) уже есть в истории — не спрашивай повторно. "
-        "   Используй то, что уже сказано."
-        "4. Если пользователь написал 'спасибо', 'ок', 'ясно' — это не новые условия, используй предыдущие."
-        "\n\n"
-        "Правила:"
-        "1. Только structured JSON. Без пояснений."
-        "2. Для диапазонов: если сказано 'от X до Y' — min=X, max=Y."
+        "Извлеки из всей истории диалога действующие условия покупки и верни JSON по схеме. "
+        "Учитывай уточнения и короткие ответы. Если покупатель изменил условие, новое "
+        "значение заменяет старое для этого поля. Остальные поля сохраняй.\n"
+        "categories — список всех запрошенных видов товаров, по одному ID на вид. "
+        "Словарь: стол → table; стул или кресло → chair; лампа или светильник → lamp. "
+        "Например, «стол до 100 см, кресло» → [\"table\",\"chair\"]; "
+        "«только лампу» → [\"lamp\"]. Слова о размерах, регулировке и цвете — характеристики. "
+        "Если виды товаров не определены или покупатель просит также товар вне словаря "
+        "(например, стол и диван), верни categories=null.\n"
+        "city_id: Таганрог → taganrog, Ростов-на-Дону → rostov-na-donu, Азов → azov. "
+        "Для неизвестного, неназванного или неоднозначного города верни null. "
+        "budget_rub — последняя явно указанная максимальная сумма в рублях за весь комплект, "
+        "в том числе 0. Если она неясна, верни null. Не путай деньги с характеристиками.\n"
+        "constraints: width_cm — ширина стола в сантиметрах (1 м = 100 см), "
+        "color_temperature_k — температура лампы в кельвинах. Указывай min и/или max. "
+        "До, не более, не шире X означают max=X; от, не менее X означают min=X. "
+        "Уже, меньше X означают max=X-1; шире, больше X означают min=X+1. "
+        "От X до Y включает обе границы. Точное значение задаёт обе границы. "
+        "adjustable_height — true для кресла с регулировкой, false для кресла без неё. "
+        "Заполняй лишь названные характеристики."
     )
 
 
-def build_user_prompt(messages: list[dict]) -> str:
-    """Build user prompt from dialog history."""
-    parts = ["История диалога:\n"]
-    for msg in messages:
-        role = msg["role"]
-        text = msg["text"]
-        if role == "user":
-            parts.append(f"Покупатель: {text}")
-        elif role == "assistant":
-            parts.append(f"Помощник: {text}")
-    parts.append("\nИзвлеки условия и верни JSON.")
-    return "\n".join(parts)
-
-
-def call_llm(messages: list[dict]) -> Optional[dict]:
-    """Call LLM API and parse intent from response.
-
-    Returns:
-        dict with keys: city_id, budget_rub, categories, constraints
-        or None on error (caller should return 'clarify').
-    """
+def call_llm(messages: list[dict]) -> dict:
+    """Submit the full dialog and decode the gateway's structured result."""
     if not LLM_API_KEY:
-        logger.warning("LLM_API_KEY not set, cannot call LLM")
-        return None
+        raise LLMError("LLM_API_KEY is not set")
 
-    system_prompt = build_system_prompt()
-    user_prompt = build_user_prompt(messages)
-
-    # Check prompt size
-    prompt_size = len((system_prompt + user_prompt).encode("utf-8"))
-    if prompt_size > 32000:
-        logger.warning(f"Prompt too large ({prompt_size} bytes), truncating user messages")
-        # Keep only last 5 messages to fit
-        truncated_messages = messages[-5:] if len(messages) > 5 else messages
-        user_prompt = build_user_prompt(truncated_messages)
+    history = [{"role": "system", "content": build_system_prompt()}]
+    history.extend({"role": msg["role"], "content": msg["text"]} for msg in messages)
+    if sum(len(msg["content"].encode("utf-8")) for msg in history) > 32768:
+        raise LLMError("dialog exceeds the 32768-byte model input limit")
 
     body = {
         "model": LLM_MODEL,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
+        "messages": history,
         "max_tokens": 256,
         "temperature": 0,
         "response_format": {
             "type": "json_schema",
-            "json_schema": {
-                "name": "buyer_requirements",
-                "strict": True,
-                "schema": INTENT_SCHEMA
-            }
+            "json_schema": {"name": "buyer_requirements", "strict": True, "schema": INTENT_SCHEMA},
         },
         "stream": False,
-        "n": 1
+        "n": 1,
     }
+    payload = json.dumps(body, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    if len(payload) > 65536:
+        raise LLMError("request exceeds the 65536-byte HTTP body limit")
 
     headers = {
         "Authorization": f"Bearer {LLM_API_KEY}",
         "Content-Type": "application/json",
         "User-Agent": LLM_USER_AGENT,
     }
+    # Leave time for local selection and writing stdout within the 120-second CLI budget.
+    deadline = time.monotonic() + 105
+    for attempt in range(2):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise LLMError("model request timed out")
+        try:
+            response = requests.post(
+                LLM_BASE_URL.rstrip("/") + "/chat/completions",
+                data=payload,
+                headers=headers,
+                timeout=Timeout(connect=5, total=min(90, remaining)),
+            )
+        except requests.exceptions.RequestException as error:
+            raise LLMError(f"model request failed ({type(error).__name__})") from None
+        if response.status_code == 429 and attempt == 0:
+            # Retry once only on an explicit delay. Time spent in the first
+            # request reduces the allowance for both waiting and the second call.
+            retry_after = response.headers.get("Retry-After", "")
+            if retry_after.isascii() and retry_after.isdigit() and len(retry_after) <= 2:
+                delay = int(retry_after)
+                if delay <= 60 and delay + 5 < deadline - time.monotonic():
+                    time.sleep(delay)
+                    continue
+        if response.status_code != 200:
+            raise LLMError(f"model gateway returned HTTP {response.status_code}")
+        break
 
     try:
-        logger.info("Calling LLM API for intent extraction")
-        response = requests.post(
-            LLM_BASE_URL.rstrip("/") + "/chat/completions",
-            json=body,
-            headers=headers,
-            timeout=90,
-        )
+        choice = response.json()["choices"][0]
+        message = choice["message"]
+        if choice["finish_reason"] != "stop" or message["role"] != "assistant":
+            raise ValueError
+        content = message["content"]
+        if not isinstance(content, str):
+            raise ValueError
+        intent = json.loads(content, object_pairs_hook=_unique_fields)
+    except (ValueError, KeyError, IndexError, TypeError):
+        raise LLMError("malformed model response") from None
+    return intent
 
-        if response.status_code == 401:
-            logger.error("LLM API: 401 Unauthorized. Check LLM_API_KEY")
-            raise LLMError("401 Unauthorized")
-        elif response.status_code == 403:
-            logger.error("LLM API: 403 Forbidden. Access may be expired")
-            raise LLMError("403 Forbidden")
-        elif response.status_code == 429:
-            logger.error("LLM API: 429 Rate limit exceeded")
-            raise LLMError("429 Rate limit")
-        elif response.status_code != 200:
-            logger.error(f"LLM API: {response.status_code} - {response.text[:500]}")
-            raise LLMError(f"HTTP {response.status_code}")
 
-        data = response.json()
-        content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-        if not content:
-            logger.error("LLM API: empty content in response")
-            return None
-
-        # Parse JSON string from response
-        try:
-            intent = json.loads(content)
-            logger.info(f"LLM parsed intent: {intent}")
-            return intent
-        except json.JSONDecodeError as e:
-            logger.error(f"LLM returned invalid JSON: {e}")
-            logger.error(f"Raw content: {content[:500]}")
-            return None
-
-    except LLMError:
-        # Re-raise — caller should exit non-zero (CONTRACT §1: external service error)
-        raise
-    except requests.exceptions.Timeout:
-        logger.error("LLM API: request timeout (90s)")
-        raise LLMError("Timeout after 90s")
-    except requests.exceptions.ConnectionError as e:
-        logger.error(f"LLM API: connection error: {e}")
-        raise LLMError(f"Connection error: {e}")
-    except Exception as e:
-        logger.error(f"LLM API: unexpected error: {e}")
-        raise LLMError(f"Unexpected error: {e}")
+def _unique_fields(pairs):
+    fields = dict(pairs)
+    if len(fields) != len(pairs):
+        raise ValueError("duplicate model field")
+    return fields
 
 
 def parse_request(messages: list[dict]) -> dict:
-    """Call LLM to extract requirements from dialog history.
-
-    Args:
-        messages: list of {role, text} from request.
-
-    Returns:
-        dict with keys: city_id, budget_rub, categories, constraints.
-        Missing values are None/empty — caller must return 'clarify' if needed.
-
-    Raises:
-        LLMError: if LLM API returns an error (401/403/429/timeout).
-                  CONTRACT §1: external service errors → non-zero exit.
-    """
-    logger.info(f"Parsing request with {len(messages)} messages")
-
+    """Return normalized conditions. Missing buyer conditions are represented by null."""
     intent = call_llm(messages)
+    if not isinstance(intent, dict) or set(intent) != set(INTENT_SCHEMA["required"]):
+        raise LLMError("invalid model intent fields")
 
-    if intent is None:
-        # LLM returned empty/invalid JSON — treat as missing intent
-        # (not an API error, so caller will return clarify)
-        logger.warning("LLM returned no valid intent, treating as empty")
-        return {
-            "city_id": None,
-            "budget_rub": None,
-            "categories": [],
-            "constraints": {},
-            "_has_unsupported_categories": False,
-        }
-
-    # Validate and normalize
-    city_id = intent.get("city_id")
-    if city_id not in SUPPORTED_CITIES:
-        city_id = None
-
-    budget_rub = intent.get("budget_rub")
-    if budget_rub is not None and (not isinstance(budget_rub, int) or budget_rub < 0):
-        budget_rub = None
-
-    categories = intent.get("categories")
-    has_unsupported_categories = False
+    city = intent["city_id"]
+    budget = intent["budget_rub"]
+    categories = intent["categories"]
+    if city is not None and not isinstance(city, str):
+        raise LLMError("invalid model city")
+    if budget is not None and (type(budget) is not int or budget < 0):
+        raise LLMError("invalid model budget")
     if categories is None:
         categories = []
-    elif not isinstance(categories, list):
-        categories = []
-    else:
-        # Check for unsupported categories (CONTRACT §4: should trigger clarify)
-        unsupported = [c for c in categories if c not in SUPPORTED_CATEGORIES]
-        if unsupported:
-            has_unsupported_categories = True
-        # Filter to supported categories only
-        categories = [c for c in categories if c in SUPPORTED_CATEGORIES]
-
-    constraints = intent.get("constraints") or {}
-    if not isinstance(constraints, dict):
+    if not isinstance(categories, list) or not all(isinstance(c, str) for c in categories):
+        raise LLMError("invalid model categories")
+    unsupported = any(c not in SUPPORTED_CATEGORIES for c in categories)
+    constraints = intent["constraints"]
+    if constraints is None:
         constraints = {}
+    if not isinstance(constraints, dict):
+        raise LLMError("invalid model constraints")
 
-    # Strip constraints where all values are None (not actually set)
-    # e.g. {"width_cm": {"min": None, "max": None}} → remove entirely
-    # This prevents filter from rejecting items when constraint wasn't requested
-    stripped_constraints = {}
-    for key, val in constraints.items():
-        if val is None:
+    normalized = {}
+    for key, value in constraints.items():
+        if key not in {"width_cm", "color_temperature_k", "adjustable_height"}:
+            raise LLMError("unknown model constraint")
+        if value is None:
             continue
-        if isinstance(val, dict):
-            # Keep only if at least one non-None value
-            non_none = {k: v for k, v in val.items() if v is not None}
-            if non_none:
-                stripped_constraints[key] = non_none
+        if key == "adjustable_height":
+            if not isinstance(value, bool):
+                raise LLMError("invalid model height adjustment")
+            normalized[key] = value
         else:
-            # Boolean or other direct value
-            stripped_constraints[key] = val
+            if not isinstance(value, dict) or value.keys() - {"min", "max"}:
+                raise LLMError("invalid model range")
+            bounds = {k: v for k, v in value.items() if v is not None}
+            if any(type(v) is not int or v < 1 for v in bounds.values()):
+                raise LLMError("invalid numeric model bound")
+            if bounds:
+                normalized[key] = bounds
 
     return {
-        "city_id": city_id,
-        "budget_rub": budget_rub,
-        "categories": categories,
-        "constraints": stripped_constraints,
-        "_has_unsupported_categories": has_unsupported_categories,
+        "city_id": city if city in SUPPORTED_CITIES else None,
+        "budget_rub": budget,
+        "categories": list(dict.fromkeys(c for c in categories if c in SUPPORTED_CATEGORIES)),
+        "constraints": normalized,
+        "_has_unsupported_categories": unsupported,
     }
 
 
@@ -343,16 +247,16 @@ def needs_clarify(requirements: dict) -> list[dict]:
     """
     questions = []
 
-    if not requirements.get("categories"):
+    if not requirements.get("categories") or requirements.get("_has_unsupported_categories"):
         questions.append({
             "field": "categories",
-            "text": "Какие категории товаров вас интересуют? (table, chair, lamp)",
+            "text": "Какие категории товаров вас интересуют? (стол, кресло или лампа)",
         })
 
     if not requirements.get("city_id"):
         questions.append({
             "field": "city_id",
-            "text": "В каком городе вам нужен самовывоз? (taganrog, rostov-na-donu, azov)",
+            "text": "В каком городе вам нужен самовывоз? (Таганрог, Ростов-на-Дону или Азов)",
         })
 
     if requirements.get("budget_rub") is None:

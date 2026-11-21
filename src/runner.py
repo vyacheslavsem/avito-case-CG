@@ -76,19 +76,27 @@ def main() -> int:
     cli.add_argument("--catalog", required=True, help="Path to catalog JSON file")
     args = cli.parse_args()
 
-    catalog_path = args.catalog
+    try:
+        return process_request(args.catalog)
+    except Exception as exc:
+        logger.error("Request processing failed (%s)", type(exc).__name__)
+        return 1
 
+
+def process_request(catalog_path: str) -> int:
     # Load catalog
     try:
         logger.info(f"Loading catalog from {catalog_path}")
         with open(catalog_path, "r", encoding="utf-8") as f:
-            catalog_data = json.load(f)
+            catalog_data = json.load(f, object_pairs_hook=unique_keys, parse_constant=reject_constant)
+        if not isinstance(catalog_data, list) or any(not isinstance(item, dict) for item in catalog_data):
+            raise ValueError("expected an array of catalog entries")
         logger.info(f"Loaded {len(catalog_data)} listings")
     except FileNotFoundError:
         logger.error(f"Catalog not found: {catalog_path}")
         return 1
-    except json.JSONDecodeError as e:
-        logger.error(f"Invalid catalog JSON: {e}")
+    except (OSError, ValueError) as e:
+        logger.error(f"Cannot read catalog: {e}")
         return 1
 
     # Read request from stdin with strict validation
@@ -100,24 +108,22 @@ def main() -> int:
         logger.error(f"Invalid request: {e}")
         return 1
 
-    # Import modules (handle both script and module execution)
+    # Keep direct python src/runner.py calls compatible with the root launcher.
+    if not __package__:
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     try:
         from src.parser import parse_request, needs_clarify, LLMError
-        from src.catalog import filter_by_city, filter_by_category, filter_by_attributes, matches_attribute
+        from src.catalog import filter_by_city, filter_by_category, filter_by_attributes
         from src.combinator import build_combinations
         from src.validator import validate_response
         from src.explain import generate_explanation
-    except ImportError:
-        from parser import parse_request, needs_clarify, LLMError
-        from catalog import filter_by_city, filter_by_category, filter_by_attributes, matches_attribute
-        from combinator import build_combinations
-        from validator import validate_response
-        from explain import generate_explanation
+    except ImportError as exc:
+        logger.error("Cannot load dependency: %s", exc.name)
+        return 1
 
     # Step 1: Parse dialog → requirements
     try:
         requirements = parse_request(messages)
-        logger.info(f"Parsed requirements: {requirements}")
     except LLMError as e:
         # CONTRACT §1: external service errors → stderr + non-zero exit
         logger.error(f"LLM API error: {e}")
@@ -128,13 +134,6 @@ def main() -> int:
 
     # Step 2: Check if we need to clarify
     questions = needs_clarify(requirements)
-
-    # CONTRACT §4: if user mentioned unsupported categories → clarify
-    if not questions and requirements.get("_has_unsupported_categories"):
-        questions.append({
-            "field": "categories",
-            "text": "Вы указали категорию, которую я не поддерживаю. Уточните: стол, кресло или лампа?",
-        })
 
     if questions:
         response = {
@@ -199,7 +198,7 @@ def main() -> int:
             }
             logger.info(f"Returning no_match: {message}")
         else:
-            # Validate and add explanations
+            # Complete each option before validating it.
             response = {
                 "status": "ok",
                 "options": [],
@@ -217,18 +216,10 @@ def main() -> int:
 
                 response["options"].append(option)
 
-            # Validate response
-            errors = validate_response(response, catalog_data, request, requirements)
-            if errors:
-                logger.error(f"Validation failed: {errors}")
-                # If validation fails, return no_match
-                message = "К сожалению, не удалось подобрать комплект по заданным условиям. Попробуйте изменить параметры поиска."
-                response = {
-                    "status": "no_match",
-                    "message": message,
-                }
-            else:
-                logger.info(f"Validation passed, returning {len(options)} options")
+    errors = validate_response(response, catalog_data, request, requirements)
+    if errors:
+        logger.error("Invalid pipeline response: %s", errors)
+        return 1
 
     # Write response to stdout (binary to prevent encoding issues)
     try:
@@ -249,33 +240,13 @@ def _generate_no_match_message(categories: list, city_id: str, budget: int, cate
     """
     city_names = {"taganrog": "Таганрог", "rostov-na-donu": "Ростов-на-Дону", "azov": "Азов"}
     city_name = city_names.get(city_id, city_id)
-    cat_names = {
-        "table": "столы",
-        "chair": "кресла",
-        "lamp": "лампы",
-    }
-
-    missing = [cat for cat, listings in category_listings.items() if not listings]
+    cat_names = {"table": "стол", "chair": "кресло", "lamp": "лампа"}
+    missing = [cat_names[cat] for cat in categories if not category_listings[cat]]
     if missing:
-        parts = []
-        for cat in missing:
-            parts.append(f"в городе {city_name} нет {cat_names.get(cat, cat)}")
-        message = " + ".join(parts) + ". "
-    else:
-        message = f"В городе {city_name} "
-        if categories:
-            cat_list = ", ".join(cat_names.get(c, c) for c in categories)
-            message += f"нет полного комплекта из {cat_list} "
-        else:
-            message += "не удалось подобрать комплект "
-
-    # Use actual budget value from requirements (CONTRACT: no hardcoded thresholds)
-    if budget is not None:
-        message += f"по бюджету {budget} руб. Попробуйте увеличить бюджет или изменить состав комплекта."
-    else:
-        message += "по заданным параметрам. Попробуйте изменить бюджет, город или состав комплекта."
-
-    return message
+        return (f"По вашим условиям в городе {city_name} отсутствуют: {', '.join(missing)}. "
+                "Попробуйте изменить город, состав комплекта или требования к характеристикам.")
+    return (f"В городе {city_name} полный комплект стоит больше {budget} руб. "
+            "Попробуйте увеличить бюджет или изменить состав комплекта.")
 
 
 if __name__ == "__main__":
