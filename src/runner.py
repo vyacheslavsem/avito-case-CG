@@ -102,13 +102,13 @@ def main() -> int:
 
     # Import modules (handle both script and module execution)
     try:
-        from src.parser import parse_request, needs_clarify
+        from src.parser import parse_request, needs_clarify, LLMError
         from src.catalog import filter_by_city, filter_by_category, filter_by_attributes, matches_attribute
         from src.combinator import build_combinations
         from src.validator import validate_response
         from src.explain import generate_explanation
     except ImportError:
-        from parser import parse_request, needs_clarify
+        from parser import parse_request, needs_clarify, LLMError
         from catalog import filter_by_city, filter_by_category, filter_by_attributes, matches_attribute
         from combinator import build_combinations
         from validator import validate_response
@@ -118,12 +118,24 @@ def main() -> int:
     try:
         requirements = parse_request(messages)
         logger.info(f"Parsed requirements: {requirements}")
+    except LLMError as e:
+        # CONTRACT §1: external service errors → stderr + non-zero exit
+        logger.error(f"LLM API error: {e}")
+        return 1
     except Exception as e:
         logger.error(f"Error parsing request: {e}")
         return 1
 
     # Step 2: Check if we need to clarify
     questions = needs_clarify(requirements)
+
+    # CONTRACT §4: if user mentioned unsupported categories → clarify
+    if not questions and requirements.get("_has_unsupported_categories"):
+        questions.append({
+            "field": "categories",
+            "text": "Вы указали категорию, которую я не поддерживаю. Уточните: стол, кресло или лампа?",
+        })
+
     if questions:
         response = {
             "status": "clarify",

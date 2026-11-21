@@ -186,16 +186,23 @@ def _validate_option(
                     )
 
     # Check attribute constraints for each listing
+    # Map category name → attribute key (constraints keys are attr names, not category names)
+    CAT_TO_ATTR = {
+        "table": "width_cm",
+        "chair": "adjustable_height",
+        "lamp": "color_temperature_k",
+    }
+
     constraints = requirements.get("constraints", {})
     if constraints:
         for lid in listing_ids:
             if lid in listing_map:
                 listing = listing_map[lid]
                 cat = listing.get("category")
-                cat_constraint = constraints.get(cat)
+                attr_key = CAT_TO_ATTR.get(cat)
+                cat_constraint = constraints.get(attr_key) if attr_key else None
                 if cat_constraint:
                     if not _check_attribute_constraint(listing, cat, cat_constraint):
-                        attrs = listing.get("attributes", {})
                         errors.append(
                             f"option[{idx}]: listing {lid!r} ({cat}) "
                             f"does not satisfy constraints: {cat_constraint}"

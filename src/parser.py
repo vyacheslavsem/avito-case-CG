@@ -74,6 +74,14 @@ INTENT_SCHEMA = {
     "additionalProperties": False
 }
 
+# Sentinel for LLM API errors (distinct from "LLM returned empty/invalid intent")
+class LLMError(Exception):
+    """Raised when LLM API returns an error status (401/403/429/timeout).
+
+    CONTRACT §1: external service errors → stderr + non-zero exit, not clarify/no_match.
+    """
+
+
 # Supported values
 SUPPORTED_CITIES = ["taganrog", "rostov-na-donu", "azov"]
 SUPPORTED_CATEGORIES = ["table", "chair", "lamp"]
@@ -203,16 +211,16 @@ def call_llm(messages: list[dict]) -> Optional[dict]:
 
         if response.status_code == 401:
             logger.error("LLM API: 401 Unauthorized. Check LLM_API_KEY")
-            return None
+            raise LLMError("401 Unauthorized")
         elif response.status_code == 403:
             logger.error("LLM API: 403 Forbidden. Access may be expired")
-            return None
+            raise LLMError("403 Forbidden")
         elif response.status_code == 429:
             logger.error("LLM API: 429 Rate limit exceeded")
-            return None
+            raise LLMError("429 Rate limit")
         elif response.status_code != 200:
             logger.error(f"LLM API: {response.status_code} - {response.text[:500]}")
-            return None
+            raise LLMError(f"HTTP {response.status_code}")
 
         data = response.json()
         content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
@@ -230,15 +238,18 @@ def call_llm(messages: list[dict]) -> Optional[dict]:
             logger.error(f"Raw content: {content[:500]}")
             return None
 
+    except LLMError:
+        # Re-raise — caller should exit non-zero (CONTRACT §1: external service error)
+        raise
     except requests.exceptions.Timeout:
         logger.error("LLM API: request timeout (90s)")
-        return None
+        raise LLMError("Timeout after 90s")
     except requests.exceptions.ConnectionError as e:
         logger.error(f"LLM API: connection error: {e}")
-        return None
+        raise LLMError(f"Connection error: {e}")
     except Exception as e:
         logger.error(f"LLM API: unexpected error: {e}")
-        return None
+        raise LLMError(f"Unexpected error: {e}")
 
 
 def parse_request(messages: list[dict]) -> dict:
@@ -250,18 +261,25 @@ def parse_request(messages: list[dict]) -> dict:
     Returns:
         dict with keys: city_id, budget_rub, categories, constraints.
         Missing values are None/empty — caller must return 'clarify' if needed.
+
+    Raises:
+        LLMError: if LLM API returns an error (401/403/429/timeout).
+                  CONTRACT §1: external service errors → non-zero exit.
     """
     logger.info(f"Parsing request with {len(messages)} messages")
 
     intent = call_llm(messages)
 
     if intent is None:
-        logger.warning("LLM call failed, returning empty requirements")
+        # LLM returned empty/invalid JSON — treat as missing intent
+        # (not an API error, so caller will return clarify)
+        logger.warning("LLM returned no valid intent, treating as empty")
         return {
             "city_id": None,
             "budget_rub": None,
             "categories": [],
             "constraints": {},
+            "_has_unsupported_categories": False,
         }
 
     # Validate and normalize
@@ -274,11 +292,16 @@ def parse_request(messages: list[dict]) -> dict:
         budget_rub = None
 
     categories = intent.get("categories")
+    has_unsupported_categories = False
     if categories is None:
         categories = []
     elif not isinstance(categories, list):
         categories = []
     else:
+        # Check for unsupported categories (CONTRACT §4: should trigger clarify)
+        unsupported = [c for c in categories if c not in SUPPORTED_CATEGORIES]
+        if unsupported:
+            has_unsupported_categories = True
         # Filter to supported categories only
         categories = [c for c in categories if c in SUPPORTED_CATEGORIES]
 
@@ -307,6 +330,7 @@ def parse_request(messages: list[dict]) -> dict:
         "budget_rub": budget_rub,
         "categories": categories,
         "constraints": stripped_constraints,
+        "_has_unsupported_categories": has_unsupported_categories,
     }
 
 
