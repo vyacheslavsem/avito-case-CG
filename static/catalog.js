@@ -1,0 +1,247 @@
+/**
+ * static/catalog.js — Логика страницы каталога.
+ * Загружает товары, применяет фильтры, рендерит карточки.
+ */
+
+(function () {
+    "use strict";
+
+    // ===== DOM ELEMENTS =====
+    var catalogGrid = document.getElementById("catalogGrid");
+    var catalogCount = document.getElementById("catalogCount");
+    var catalogEmpty = document.getElementById("catalogEmpty");
+    var filterCategory = document.getElementById("filterCategory");
+    var minPriceInput = document.getElementById("minPrice");
+    var maxPriceInput = document.getElementById("maxPrice");
+    var applyFiltersBtn = document.getElementById("applyFilters");
+    var resetFiltersBtn = document.getElementById("resetFilters");
+    var citySelect = document.getElementById("citySelect");
+
+    // ===== CATEGORIES & CITIES CACHE =====
+    var allListings = [];
+    var categories = [];
+
+    // ===== INIT =====
+    function init() {
+        loadCities();
+        loadCatalog();
+        setupEventListeners();
+    }
+
+    function setupEventListeners() {
+        applyFiltersBtn.addEventListener("click", applyFilters);
+        resetFiltersBtn.addEventListener("click", resetFilters);
+
+        // City change — reload catalog
+        if (citySelect) {
+            citySelect.addEventListener("change", applyFilters);
+        }
+
+        // Category change — reload catalog
+        if (filterCategory) {
+            filterCategory.addEventListener("change", applyFilters);
+        }
+
+        // Enter key on price inputs
+        if (minPriceInput) {
+            minPriceInput.addEventListener("keydown", function (e) {
+                if (e.key === "Enter") applyFilters();
+            });
+        }
+        if (maxPriceInput) {
+            maxPriceInput.addEventListener("keydown", function (e) {
+                if (e.key === "Enter") applyFilters();
+            });
+        }
+    }
+
+    // ===== LOAD CITIES =====
+    function loadCities() {
+        if (!citySelect) return;
+
+        fetch("/api/cities")
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                data.forEach(function (city) {
+                    var option = document.createElement("option");
+                    option.value = city;
+                    option.textContent = formatCity(city);
+                    citySelect.appendChild(option);
+                });
+            })
+            .catch(function () {
+                // Fallback
+                var cities = ["taganrog", "rostov-na-donu", "azov"];
+                cities.forEach(function (city) {
+                    var option = document.createElement("option");
+                    option.value = city;
+                    option.textContent = formatCity(city);
+                    citySelect.appendChild(option);
+                });
+            });
+    }
+
+    // ===== LOAD CATALOG =====
+    function loadCatalog() {
+        var params = new URLSearchParams();
+        var city = citySelect ? citySelect.value : "";
+        if (city) params.set("city", city);
+
+        fetch("/api/catalog?" + params.toString())
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                allListings = data.listings || [];
+                categories = data.categories || [];
+                populateCategories();
+                renderListings(allListings);
+            })
+            .catch(function (err) {
+                console.error("Failed to load catalog:", err);
+                catalogCount.textContent = "Ошибка загрузки";
+            });
+    }
+
+    // ===== POPULATE CATEGORIES =====
+    function populateCategories() {
+        if (!filterCategory) return;
+
+        categories.forEach(function (cat) {
+            var value = typeof cat === "string" ? cat : (cat.name || cat.id || cat.category);
+            var label = typeof cat === "string" ? cat : (cat.title || cat.name || value);
+
+            var option = document.createElement("option");
+            option.value = value;
+            option.textContent = formatCategory(label);
+            filterCategory.appendChild(option);
+        });
+    }
+
+    // ===== APPLY FILTERS =====
+    function applyFilters() {
+        var city = citySelect ? citySelect.value : "";
+        var category = filterCategory ? filterCategory.value : "";
+        var minPrice = minPriceInput ? minPriceInput.value : "";
+        var maxPrice = maxPriceInput ? maxPriceInput.value : "";
+
+        var filtered = allListings.filter(function (item) {
+            if (city && item.city_id !== city) return false;
+            if (category && item.category !== category) return false;
+
+            var price = item.price_rub || 0;
+            if (minPrice && price < parseFloat(minPrice)) return false;
+            if (maxPrice && price > parseFloat(maxPrice)) return false;
+
+            return true;
+        });
+
+        renderListings(filtered);
+    }
+
+    // ===== RESET FILTERS =====
+    function resetFilters() {
+        if (citySelect) citySelect.value = "";
+        if (filterCategory) filterCategory.value = "";
+        if (minPriceInput) minPriceInput.value = "";
+        if (maxPriceInput) maxPriceInput.value = "";
+        renderListings(allListings);
+    }
+
+    // ===== RENDER LISTINGS =====
+    function renderListings(listings) {
+        catalogGrid.innerHTML = "";
+        catalogCount.textContent = listings.length + " товаров";
+
+        if (listings.length === 0) {
+            catalogEmpty.style.display = "block";
+            return;
+        }
+
+        catalogEmpty.style.display = "none";
+
+        listings.forEach(function (item) {
+            var card = document.createElement("div");
+            card.className = "product-card";
+
+            var categoryBadge = getCategoryLabel(item.category);
+            var price = formatPrice(item.price_rub);
+            var city = formatCity(item.city_id);
+            var title = item.title || "Без названия";
+            var desc = item.description || "";
+            var categoryId = item.category || "";
+
+            var html = '<div class="product-card__image">📦</div>';
+            html += '<div class="product-card__body">';
+            html += '<span class="product-card__category-badge">' + categoryBadge + '</span>';
+            html += '<h3 class="product-card__title">' + escapeHtml(title) + '</h3>';
+            html += '<p class="product-card__desc">' + escapeHtml(desc) + '</p>';
+            html += '<div class="product-card__price">' + price + ' ₽</div>';
+            html += '<div class="product-card__city">📍 ' + city + '</div>';
+            html += '</div>';
+
+            card.innerHTML = html;
+
+            // Click → go to chat with this item info
+            card.addEventListener("click", function () {
+                goToChatWithItem(item);
+            });
+
+            catalogGrid.appendChild(card);
+        });
+    }
+
+    // ===== GO TO CHAT WITH ITEM =====
+    function goToChatWithItem(item) {
+        if (window.location.pathname !== "/") {
+            // Already on chat page — just scroll
+            return;
+        }
+
+        var text = "Покажи товар: " + (item.title || "") + " (категория: " + (item.category || "") + ", город: " + (item.city_id || "") + ")";
+        window.location.href = "/chat?text=" + encodeURIComponent(text);
+    }
+
+    // ===== FORMAT HELPERS =====
+    function formatPrice(num) {
+        return Number(num).toLocaleString("ru-RU");
+    }
+
+    function formatCity(cityId) {
+        var labels = {
+            "taganrog": "Таганрог",
+            "rostov-na-donu": "Ростов-на-Дону",
+            "azov": "Азов"
+        };
+        return labels[cityId] || cityId || "";
+    }
+
+    function getCategoryLabel(catId) {
+        var labels = {
+            "table": "Стол",
+            "chair": "Кресло",
+            "lamp": "Лампа"
+        };
+        return labels[catId] || catId || "Товар";
+    }
+
+    function escapeHtml(str) {
+        var div = document.createElement("div");
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    // ===== CHECK URL PARAMS (pre-filled chat text) =====
+    function checkUrlParams() {
+        var params = new URLSearchParams(window.location.search);
+        var text = params.get("text");
+        if (text && window.location.pathname === "/chat") {
+            // Will be handled by chat.js — store in sessionStorage
+            try {
+                sessionStorage.setItem("chat_pretext", text);
+            } catch (e) { /* ignore */ }
+        }
+    }
+
+    // ===== BOOT =====
+    init();
+    checkUrlParams();
+})();

@@ -2,7 +2,7 @@
 
 Avito CyberGarden 2026 — hackathon case: create an AI buyer assistant that parses buyer requests, clarifies missing conditions, and selects product kits from a catalog.
 
-## Quick start
+## Quick start (CLI)
 
 ```sh
 # 1. Install dependencies
@@ -19,6 +19,33 @@ set +a
 # 3. Run with the sample catalog
 ./run --catalog docs/tz/data/catalog.json < docs/tz/examples/01-selection/request.json > response.json
 ```
+
+## Web interface (FastAPI)
+
+```sh
+# 1. Install web dependencies
+pip install fastapi uvicorn jinja2 python-multipart
+
+# 2. Set up environment
+cp .env.example .env
+# Fill in LLM_API_KEY
+
+# 3. Run the web server
+python main.py
+
+# 4. Open in browser
+# http://localhost:8000 — Каталог товаров
+# http://localhost:8000/chat — AI-помощник (чат-бот)
+```
+
+### Web UI Features
+
+- **Каталог** — карточки товаров с фильтрами (город, категория, цена)
+- **AI-помощник** — чат-бот для подбора товаров через LLM
+  - Диалоговый интерфейс с подсказками
+  - Отображение подобранных комплектов
+  - Поддержка уточняющих вопросов
+- **Стилизация** — интерфейс похож на Авито
 
 ## Dependencies
 
@@ -89,6 +116,8 @@ identical inputs and spaces out distinct requests to respect the team quota.
 
 ```
 run                    executable entry point
+main.py                FastAPI веб-сервер
+cli_wrapper.py         Обёртка над CLI для вызова из API
 src/
   runner.py            stdin/stdout, error handling, pipeline
   parser.py            LLM integration, dialog → structured requirements
@@ -96,6 +125,14 @@ src/
   combinator.py        build combinations, rank, select up to 3
   validator.py         validate response against catalog and request
   explain.py           generate explanation (template fallback)
+templates/             HTML шаблоны (Jinja2)
+  base.html            Базовый шаблон с header/footer
+  index.html           Страница каталога
+  chat.html            Страница чат-бота
+static/                Статические файлы
+  style.css            CSS стили (Avito-like)
+  catalog.js           JS для страницы каталога
+  chat.js              JS для чат-бота
 tests/                 test cases
 scripts/
   check.py             run examples through ./run

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Avito CyberGarden{% endblock %}</title>
+    <link rel="stylesheet" href="/static/style.css">
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <!-- ===== HEADER ===== -->
+    <header class="header">
+        <div class="header__container">
+            <a href="/" class="header__logo">Avito<span class="header__logo-accent">Garden</span></a>
+            <nav class="header__nav">
+                <a href="/" class="header__nav-link {% if page == 'index' %}header__nav-link--active{% endif %}">Каталог</a>
+                <a href="/chat" class="header__nav-link {% if page == 'chat' %}header__nav-link--active{% endif %}">AI-помощник</a>
+            </nav>
+            <div class="header__actions">
+                <div class="header__city-select" id="headerCity">
+                    <svg class="header__city-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                        <circle cx="12" cy="10" r="3"></circle>
+                    </svg>
+                    <select id="citySelect" class="header__city-dropdown">
+                        <option value="">Все города</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- ===== MAIN ===== -->
+    <main class="main">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- ===== FOOTER ===== -->
+    <footer class="footer">
+        <div class="footer__container">
+            <p>&copy; 2026 Avito CyberGarden — AI Buyer Assistant</p>
+        </div>
+    </footer>
+
+    <!-- ===== SCRIPTS ===== -->
+    <script src="/static/app.js"></script>
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>
