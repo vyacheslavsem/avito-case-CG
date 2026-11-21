@@ -20,6 +20,25 @@
     // ===== CATEGORIES & CITIES CACHE =====
     var allListings = [];
     var categories = [];
+    var isLoading = false;
+
+    // ===== NOTIFICATIONS =====
+    function showNotification(message, type) {
+        var existing = document.querySelector(".notification");
+        if (existing) existing.remove();
+
+        var notification = document.createElement("div");
+        notification.className = "notification notification--" + type;
+        notification.textContent = message;
+        document.body.appendChild(notification);
+
+        setTimeout(function () {
+            notification.style.animation = "fadeOut 0.3s ease-out";
+            setTimeout(function () {
+                if (notification.parentNode) notification.remove();
+            }, 300);
+        }, 4000);
+    }
 
     // ===== INIT =====
     function init() {
@@ -64,8 +83,9 @@
             .then(function (data) {
                 data.forEach(function (city) {
                     var option = document.createElement("option");
-                    option.value = city;
-                    option.textContent = formatCity(city);
+                    // API возвращает объекты {id, name} или строки
+                    option.value = city.id || city;
+                    option.textContent = city.name || formatCity(city.id || city);
                     citySelect.appendChild(option);
                 });
             })
@@ -83,21 +103,32 @@
 
     // ===== LOAD CATALOG =====
     function loadCatalog() {
+        if (isLoading) return;
+        isLoading = true;
+
         var params = new URLSearchParams();
         var city = citySelect ? citySelect.value : "";
         if (city) params.set("city", city);
 
         fetch("/api/catalog?" + params.toString())
-            .then(function (res) { return res.json(); })
+            .then(function (res) {
+                if (!res.ok) throw new Error("HTTP " + res.status);
+                return res.json();
+            })
             .then(function (data) {
                 allListings = data.listings || [];
                 categories = data.categories || [];
                 populateCategories();
                 renderListings(allListings);
+                showNotification("Загружено " + allListings.length + " товаров", "success");
             })
             .catch(function (err) {
                 console.error("Failed to load catalog:", err);
                 catalogCount.textContent = "Ошибка загрузки";
+                showNotification("Не удалось загрузить каталог", "error");
+            })
+            .finally(function () {
+                isLoading = false;
             });
     }
 
@@ -106,8 +137,14 @@
         if (!filterCategory) return;
 
         categories.forEach(function (cat) {
-            var value = typeof cat === "string" ? cat : (cat.name || cat.id || cat.category);
-            var label = typeof cat === "string" ? cat : (cat.title || cat.name || value);
+            var value, label;
+            if (typeof cat === "object") {
+                value = cat.name || cat.id || cat.category;
+                label = cat.title || cat.name || value;
+            } else {
+                value = cat;
+                label = cat;
+            }
 
             var option = document.createElement("option");
             option.value = value;
